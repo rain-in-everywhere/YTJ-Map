@@ -143,6 +143,32 @@ function handlePacketInspect(request) {
   }
 
   return json({
+    // ── 路由追踪：分组如何到达 Worker ──
+    route: {
+      client: {
+        ip: request.headers.get("CF-Connecting-IP") || "N/A",
+        asn: cf.asn ? `AS${cf.asn}` : "N/A",
+        city: cf.city || "N/A",
+        country: cf.country || "N/A",
+        note: "你的设备 → ISP 网络 → Internet",
+      },
+      dns: {
+        domain: url.hostname,
+        resolved: cf.colo ? `${cf.colo}（Cloudflare 边缘 Anycast）` : "DNS 解析 → CNAME → Cloudflare 边缘 IP",
+        note: "DNS 将域名解析为 IP，Anycast 使同一 IP 在 330+ 节点同时宣告，BGP 自动选最近路径。",
+      },
+      edge: {
+        colo: cf.colo || "N/A",
+        coloName: coloName(cf.colo),
+        tlsTermination: "边缘节点完成 SSL 解密",
+        workerRuntime: "V8 Isolate 执行 Worker 代码",
+        note: `请求到达 Cloudflare ${cf.colo || "?"} 边缘节点 → SSL 解密 → Worker 处理 → 生成响应。`,
+      },
+      returnPath: {
+        direction: "响应沿原路径返回",
+        note: "边缘节点将 Worker 响应通过已建立的 TCP 连接返回给你的浏览器。",
+      },
+    },
     // ── IP 层 ──
     ip: {
       src: request.headers.get("CF-Connecting-IP") || "N/A",
@@ -151,7 +177,7 @@ function handlePacketInspect(request) {
       version: 4,
       headerLength: "20 bytes",
       ttl: "—（边缘节点已终结）",
-      note: "源 IP 来自 CF-Connecting-IP 头；目的 IP 为本 Worker 域名。TTL 在 Cloudflare 边缘被终结。",
+      note: "源 IP 来自 CF-Connecting-IP；真实 TTL/DF 等 IP 头字段在边缘被剥离。",
     },
     // ── TCP 层 ──
     tcp: {
@@ -159,13 +185,13 @@ function handlePacketInspect(request) {
       dstPort: 443,
       flags: ["ACK", "PSH"],
       headerLength: "20 bytes",
-      note: "TCP 连接在 Cloudflare 边缘终结（SSL Termination），Worker 收到的已是解析后的 HTTP 请求。",
+      note: "TCP 连接在 Cloudflare 边缘终结（SSL Termination）。",
     },
     // ── TLS 层 ──
     tls: {
       version: cf.tlsVersion || "TLSv1.3",
       cipher: cf.tlsCipher || "—",
-      note: "客户端到 Cloudflare 边缘的 TLS 加密；CF 用 request.cf 透传加密参数给 Worker。",
+      note: "客户端 ↔ Cloudflare 边缘 TLS 加密；CF 用 request.cf 透传参数。",
     },
     // ── HTTP 层 ──
     http: {
@@ -174,11 +200,17 @@ function handlePacketInspect(request) {
       version: cf.httpProtocol || "HTTP/1.1",
       host: url.host,
       headers: httpHeaders,
-      note: "这是 Worker 收到的完整 HTTP 请求，经过了 IP→TCP→TLS 逐层解封装。",
+      note: "经过 IP→TCP→TLS 解封装后，Worker 收到的完整 HTTP 请求。",
     },
-    // ── 时间线 ──
     serverTime: new Date().toISOString(),
   });
+}
+
+// colo 代码 → 城市名
+function coloName(code) {
+  const m = { LAX:"洛杉矶", NRT:"东京", FRA:"法兰克福", HKG:"香港", SIN:"新加坡", LHR:"伦敦", AMS:"阿姆斯特丹", SYD:"悉尼", GRU:"圣保罗", MXP:"米兰", CDG:"巴黎", DME:"莫斯科", BOM:"孟买", ICN:"首尔", KIX:"大阪" };
+  return m[code] || code || "?";
+}
 }
 
 // ═══════════════════════════════════════════════

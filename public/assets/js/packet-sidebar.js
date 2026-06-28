@@ -79,12 +79,34 @@ function addSidebarEntry({ method, path, status, ms, hdrs }) {
   list.scrollTop = list.scrollHeight;
 }
 
-// ── 构建数据包分层详情 ──
+// ── 构建路由追踪 + 数据包分层详情 ──
 function buildPacketDetail(method, path, status, ms, hdrs) {
-  // 用 basePacket 填充 IP/TCP/TLS 层
-  const ip = basePacket?.ip || { src: "—", dst: location.hostname, protocol: "TCP", version: 4, headerLength: "20 bytes", ttl: "—", note: "IP 层信息来自 Cloudflare request.cf" };
-  const tcp = basePacket?.tcp || { srcPort: "—", dstPort: 443, flags: ["ACK","PSH"], headerLength: "20 bytes", note: "TCP 在 Cloudflare 边缘终结" };
-  const tls = basePacket?.tls || { version: "TLSv1.3", cipher: "—", note: "客户端→CF 边缘 TLS 加密" };
+  const ip = basePacket?.ip || { src: "—", dst: location.hostname, protocol: "TCP", version: 4, headerLength: "20 bytes", ttl: "—" };
+  const tcp = basePacket?.tcp || { srcPort: "—", dstPort: 443, flags: ["ACK","PSH"], headerLength: "20 bytes" };
+  const tls = basePacket?.tls || { version: "TLSv1.3", cipher: "—" };
+  const route = basePacket?.route || null;
+
+  // 路由追踪图
+  let routeHtml = "";
+  if (route) {
+    routeHtml = `
+    <div style="font-size:0.72rem; padding:0.4rem 0.5rem; margin-bottom:0.3rem; border:1px dashed var(--color-border); border-radius:4px; line-height:1.6;">
+      <div style="display:flex;align-items:center;gap:0.3rem;margin-bottom:0.2rem;">
+        <span style="color:var(--color-accent);font-weight:700;">🖥 你</span>
+        <span style="color:var(--color-text-muted);">${escapeHTML(route.client.ip)} (${escapeHTML(route.client.asn)}) · ${escapeHTML(route.client.city)}</span>
+      </div>
+      <div style="text-align:center;color:var(--color-text-muted);margin:0.15rem 0;">⬇ ISP 网络 · BGP Anycast</div>
+      <div style="display:flex;align-items:center;gap:0.3rem;margin-bottom:0.2rem;">
+        <span style="color:var(--color-primary);font-weight:700;">☁️ Cloudflare</span>
+        <span style="color:var(--color-text-muted);">${escapeHTML(route.edge.colo)} ${route.edge.coloName||""} · SSL 解密 · Worker 执行</span>
+      </div>
+      <div style="text-align:center;color:var(--color-text-muted);margin:0.15rem 0;">⬆ 响应原路返回</div>
+      <div style="display:flex;align-items:center;gap:0.3rem;">
+        <span style="color:var(--color-accent);font-weight:700;">🖥 你</span>
+        <span style="color:var(--color-text-muted);">收到 ${status} · ${ms}ms</span>
+      </div>
+    </div>`;
+  }
 
   // HTTP 响应头摘要
   let hdrRows = "";
@@ -93,7 +115,7 @@ function buildPacketDetail(method, path, status, ms, hdrs) {
     if (hdrs[k]) hdrRows += `<span class="pkt-hdr"><span class="k">${escapeHTML(k)}</span> <span class="v">${escapeHTML(hdrs[k])}</span></span>`;
   });
 
-  return `
+  return routeHtml + `
     <div class="pkt-layer pkt-ip">
       <span class="lbl">IP</span>
       <div class="pkt-hdr">
@@ -120,10 +142,8 @@ function buildPacketDetail(method, path, status, ms, hdrs) {
     <div class="pkt-layer pkt-http">
       <span class="lbl">HTTP</span>
       <div class="pkt-hdr">
-        <span><span class="k">Method</span> <span class="v">${escapeHTML(method)}</span></span>
-        <span><span class="k">Path</span> <span class="v">${escapeHTML(path)}</span></span>
-        <span><span class="k">Status</span> <span class="v">${status}</span></span>
-        <span><span class="k">耗时</span> <span class="v">${ms}ms</span></span>
+        <span><span class="k">${escapeHTML(method)}</span> <span class="v">${escapeHTML(path)}</span></span>
+        <span><span class="k">→</span> <span class="v">${status} · ${ms}ms</span></span>
         ${hdrRows}
       </div>
     </div>
