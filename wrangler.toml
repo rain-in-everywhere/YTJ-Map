@@ -11,7 +11,11 @@ compatibility_flags = ["nodejs_compat"]
 directory = "./public"
 binding = "ASSETS"
 
+# 自定义域名路由
+[[routes]]
+pattern = "lyra4.icu/*"
+zone_name = "lyra4.icu"
+
 # 环境变量
 [vars]
-SITE_NAME = "计网学习笔记"
-SITE_AUTHOR = "Student"
+SITE_NAME = "lyra4"

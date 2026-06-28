@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>计网知识 — lyra4</title>
+  <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-brand">lyra4</a>
+      <div class="nav-links">
+        <a href="/">首页</a>
+        <a href="/blog.html">博客</a>
+        <a href="/networking/">计网知识</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="hero">
+      <h1>🌐 计算机网络知识</h1>
+      <p class="subtitle">通过四个交互式演示，深入理解 CDN、DNS、HTTP 缓存和 Serverless 的核心原理</p>
+    </div>
+
+    <div class="card-grid" style="margin-top: 0;">
+
+      <a href="/networking/cdn-edge.html" class="card" style="text-decoration: none; color: inherit;">
+        <h3>🌍 CDN 与边缘计算</h3>
+        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
+          查看你的请求命中了哪个边缘节点（colo），理解 CDN 如何通过就近服务将延迟降低一个数量级。
+        </p>
+        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
+          CDN · 边缘节点 · Anycast · TLS
+        </div>
+      </a>
+
+      <a href="/networking/http-caching.html" class="card" style="text-decoration: none; color: inherit;">
+        <h3>⚡ HTTP 缓存策略</h3>
+        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
+          交互式对比 6 种 Cache-Control 策略，观察 ETag 条件请求和 304 Not Modified 响应。
+        </p>
+        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
+          Cache-Control · ETag · 304 · 条件请求
+        </div>
+      </a>
+
+      <a href="/networking/dns.html" class="card" style="text-decoration: none; color: inherit;">
+        <h3>🔍 DNS 解析</h3>
+        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
+          通过 DNS-over-HTTPS 加密查询任意域名的 DNS 记录，支持 A、AAAA、CNAME、MX、TXT、NS 等类型。
+        </p>
+        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
+          DNS · DoH · 记录类型 · 域名层次
+        </div>
+      </a>
+
+      <a href="/networking/serverless.html" class="card" style="text-decoration: none; color: inherit;">
+        <h3>⚙️ Serverless 计算</h3>
+        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
+          了解 Cloudflare Workers 的 V8 Isolate 执行模型，对比冷/热启动性能差异。
+        </p>
+        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
+          FaaS · V8 Isolate · 冷启动 · 边缘执行
+        </div>
+      </a>
+
+    </div>
+
+    <section style="margin-top: 2.5rem;">
+      <h2 style="margin-bottom: 1rem;">📖 相关博客</h2>
+      <div class="blog-list">
+        <a href="/blog/post-1.html" class="post-item">
+          <div class="date">2026-06-28</div>
+          <h3>数据包的网络之旅</h3>
+          <p>从输入 URL 到页面呈现，DNS → TCP → TLS → HTTP → CDN 全流程追踪</p>
+        </a>
+        <a href="/blog/post-2.html" class="post-item">
+          <div class="date">2026-06-27</div>
+          <h3>理解 CDN</h3>
+          <p>为什么"距离"是互联网上最昂贵的资源，CDN 如何消除光速延迟</p>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>lyra4 · Powered by <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a></p>
+  </footer>
+  <script src="/assets/js/main.js"></script>
+</body>
+</html>
