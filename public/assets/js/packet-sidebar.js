@@ -26,15 +26,18 @@ let reqCounter = 0;
     sessionStorage.setItem(STORAGE_KEY_BASE, JSON.stringify(basePacket));
   }
 
-  // 只在首次（没有保存历史）时添加 PAGE 条目
-  if (entries.length === 0) {
-    entries.push({ method: "PAGE", path: location.pathname, status: 200, ms: 0, hdrs: {} });
-    persistList();
-  } else {
-    // 添加当前页面访问条目
-    entries.push({ method: "PAGE", path: location.pathname, status: 200, ms: 0, hdrs: {} });
-    persistList();
-  }
+  // 获取页面加载时间（Navigation Timing API）
+  const navTiming = performance.getEntriesByType("navigation")[0];
+  const pageMs = navTiming ? Math.round(navTiming.loadEventEnd || navTiming.responseEnd) : null;
+
+  entries.push({
+    method: "PAGE",
+    path: location.pathname + location.search,
+    status: null,  // 页面加载不是 HTTP API，无状态码
+    ms: pageMs,
+    hdrs: {},
+  });
+  persistList();
 
   renderAll();
   injectInterceptor();
@@ -60,7 +63,9 @@ function renderAll() {
     return;
   }
   entries.forEach((e, i) => {
-    const cls = e.status >= 200 && e.status < 300 ? "s2xx" : e.status >= 300 && e.status < 400 ? "s3xx" : "s4xx";
+    const statusText = e.status != null ? e.status : "页面";
+    const cls = e.status != null ? (e.status >= 200 && e.status < 300 ? "s2xx" : e.status >= 300 && e.status < 400 ? "s3xx" : "s4xx") : "";
+    const timeText = e.ms != null ? e.ms + "ms" : "—";
     const item = document.createElement("div");
     item.className = "req-item";
     item.innerHTML = `
@@ -68,8 +73,8 @@ function renderAll() {
         <span class="req-num">#${i + 1}</span>
         <span class="req-method">${escapeHTML(e.method)}</span>
         <span class="req-path">${escapeHTML(e.path)}</span>
-        <span class="req-status ${cls}">${e.status}</span>
-        <span class="req-time">${e.ms ? e.ms + "ms" : "—"}</span>
+        <span class="req-status ${cls}">${statusText}</span>
+        <span class="req-time">${timeText}</span>
         <span class="req-expand">▸</span>
       </div>
       <div class="req-detail">${buildPacketDetail(e)}</div>
@@ -109,7 +114,9 @@ function addEntry(e) {
   const list = document.getElementById("req-list");
   if (entries.length === 1) list.innerHTML = "";
   reqCounter = entries.length;
-  const cls = e.status >= 200 && e.status < 300 ? "s2xx" : e.status >= 300 && e.status < 400 ? "s3xx" : "s4xx";
+  const statusText = e.status != null ? e.status : "页面";
+  const cls = e.status != null ? (e.status >= 200 && e.status < 300 ? "s2xx" : e.status >= 300 && e.status < 400 ? "s3xx" : "s4xx") : "";
+  const timeText = e.ms != null ? e.ms + "ms" : "—";
   const item = document.createElement("div");
   item.className = "req-item";
   item.innerHTML = `
@@ -117,8 +124,8 @@ function addEntry(e) {
       <span class="req-num">#${reqCounter}</span>
       <span class="req-method">${escapeHTML(e.method)}</span>
       <span class="req-path">${escapeHTML(e.path)}</span>
-      <span class="req-status ${cls}">${e.status}</span>
-      <span class="req-time">${e.ms ? e.ms + "ms" : "—"}</span>
+      <span class="req-status ${cls}">${statusText}</span>
+      <span class="req-time">${timeText}</span>
       <span class="req-expand">▸</span>
     </div>
     <div class="req-detail">${buildPacketDetail(e)}</div>
@@ -151,7 +158,7 @@ function buildPacketDetail(e) {
       <div style="text-align:center;color:var(--color-text-muted);margin:0.15rem 0;">⬆ 响应原路返回</div>
       <div style="display:flex;align-items:center;gap:0.3rem;">
         <span style="color:var(--color-accent);font-weight:700;">🖥 你</span>
-        <span style="color:var(--color-text-muted);">收到 ${e.status} · ${e.ms}ms</span>
+        <span style="color:var(--color-text-muted);">收到${e.status != null ? " " + e.status + " ·" : ""} ${e.ms != null ? e.ms + "ms" : "—"}</span>
       </div>
     </div>`;
   }
@@ -172,7 +179,7 @@ function buildPacketDetail(e) {
     </div>
     <div class="pkt-layer pkt-http">
       <span class="lbl">HTTP</span>
-      <div class="pkt-hdr"><span><span class="k">${escapeHTML(e.method)}</span> <span class="v">${escapeHTML(e.path)}</span></span><span><span class="k">→</span> <span class="v">${e.status} · ${e.ms}ms</span></span>${hdrRows}</div>
+      <div class="pkt-hdr"><span><span class="k">${escapeHTML(e.method)}</span> <span class="v">${escapeHTML(e.path)}</span></span><span><span class="k">→</span> <span class="v">${e.status != null ? e.status + " · " : ""}${e.ms != null ? e.ms + "ms" : "—"}</span></span>${hdrRows}</div>
     </div>
   `;
 }
