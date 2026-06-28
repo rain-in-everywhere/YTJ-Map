@@ -5,6 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>技术栈 — lyra4</title>
   <link rel="stylesheet" href="/assets/css/style.css">
+  <style>
+    .pkt-stack { font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.6; }
+    .pkt-layer { border: 1px solid; border-radius: 6px; padding: 0.75rem 0.75rem 0.75rem 2.5rem; margin: 0.25rem 0; position: relative; }
+    .pkt-layer .lbl { position: absolute; left: 0.5rem; top: 0.5rem; font-weight: 700; font-size: 0.7rem; text-transform: uppercase; }
+    .pkt-ip { border-color: #6366f1; background: rgba(99,102,241,0.06); }
+    .pkt-ip .lbl { color: #6366f1; }
+    .pkt-tcp { border-color: #0ea5e9; background: rgba(14,165,233,0.06); margin-left: 0.75rem; }
+    .pkt-tcp .lbl { color: #0ea5e9; }
+    .pkt-tls { border-color: #8b5cf6; background: rgba(139,92,246,0.06); margin-left: 1.5rem; }
+    .pkt-tls .lbl { color: #8b5cf6; }
+    .pkt-http { border-color: #10b981; background: rgba(16,185,129,0.06); margin-left: 2.25rem; }
+    .pkt-http .lbl { color: #10b981; }
+    .pkt-field { display: inline-block; margin-right: 1.25rem; }
+    .pkt-field .k { color: var(--color-text-muted); font-size: 0.75rem; }
+    .pkt-field .v { color: var(--color-text); font-weight: 600; }
+    .pkt-note { font-size: 0.75rem; color: var(--color-text-muted); font-style: italic; margin-top: 0.35rem; }
+  </style>
 </head>
 <body>
   <nav class="nav">
@@ -22,6 +39,18 @@
       <h1>技术栈</h1>
       <p class="subtitle">Cloudflare Workers · CDN · 缓存 · DNS · Serverless</p>
     </div>
+
+    <!-- ═══ 0. 自暴露：数据包解析 ═══ -->
+    <section class="card">
+      <h2>📦 本次请求的数据包解析</h2>
+      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
+        点击按钮，解析你当前请求的 IP → TCP → TLS → HTTP 各层封装信息。
+      </p>
+      <button class="btn" onclick="inspectPacket()">🔬 解析本次请求</button>
+      <div id="packet-result" style="margin-top: 1rem;">
+        <span style="color: var(--color-text-muted);">点击按钮查看你的请求在各协议层的封装详情…</span>
+      </div>
+    </section>
 
     <!-- ═══ 1. CDN ═══ -->
     <section class="card">
@@ -105,5 +134,67 @@
   <script src="/assets/js/cache-demo.js"></script>
   <script src="/assets/js/dns-demo.js"></script>
   <script src="/assets/js/serverless-demo.js"></script>
+  <script>
+    async function inspectPacket() {
+      const el = document.getElementById("packet-result");
+      el.innerHTML = '<span style="color: var(--color-text-muted);">抓包中…</span>';
+      const { data, error } = await fetchJSON("/api/packet-inspect");
+      if (error) { el.innerHTML = `<span style="color: var(--color-danger);">${escapeHTML(error)}</span>`; return; }
+
+      const ip = data.ip, tcp = data.tcp, tls = data.tls, http = data.http;
+
+      // 构件 HTTP headers 展示
+      let hdrRows = "";
+      for (const [k, v] of Object.entries(http.headers || {})) {
+        hdrRows += `<tr><td style="font-size:0.78rem;">${escapeHTML(k)}</td><td style="font-size:0.78rem;word-break:break-all;">${escapeHTML(v)}</td></tr>`;
+      }
+
+      el.innerHTML = `
+        <div class="pkt-stack">
+          <div class="pkt-layer pkt-ip">
+            <span class="lbl">IP 层</span>
+            <div>
+              <span class="pkt-field"><span class="k">源 IP</span> <span class="v">${escapeHTML(ip.src)}</span></span>
+              <span class="pkt-field"><span class="k">目的 IP</span> <span class="v">${escapeHTML(ip.dst)}</span></span>
+              <span class="pkt-field"><span class="k">协议</span> <span class="v">${escapeHTML(ip.protocol)}</span></span>
+              <span class="pkt-field"><span class="k">版本</span> <span class="v">IPv${ip.version}</span></span>
+              <span class="pkt-field"><span class="k">头部长度</span> <span class="v">${escapeHTML(ip.headerLength)}</span></span>
+              <span class="pkt-field"><span class="k">TTL</span> <span class="v">${escapeHTML(ip.ttl)}</span></span>
+              <div class="pkt-note">${escapeHTML(ip.note)}</div>
+            </div>
+          </div>
+          <div class="pkt-layer pkt-tcp">
+            <span class="lbl">TCP 层</span>
+            <div>
+              <span class="pkt-field"><span class="k">源端口</span> <span class="v">${escapeHTML(tcp.srcPort)}</span></span>
+              <span class="pkt-field"><span class="k">目的端口</span> <span class="v">${tcp.dstPort}</span></span>
+              <span class="pkt-field"><span class="k">Flags</span> <span class="v">${(tcp.flags||[]).join(", ")}</span></span>
+              <span class="pkt-field"><span class="k">头部长度</span> <span class="v">${escapeHTML(tcp.headerLength)}</span></span>
+              <div class="pkt-note">${escapeHTML(tcp.note)}</div>
+            </div>
+          </div>
+          <div class="pkt-layer pkt-tls">
+            <span class="lbl">TLS 层</span>
+            <div>
+              <span class="pkt-field"><span class="k">版本</span> <span class="v">${escapeHTML(tls.version)}</span></span>
+              <span class="pkt-field"><span class="k">加密套件</span> <span class="v">${escapeHTML(tls.cipher)}</span></span>
+              <div class="pkt-note">${escapeHTML(tls.note)}</div>
+            </div>
+          </div>
+          <div class="pkt-layer pkt-http">
+            <span class="lbl">HTTP 层</span>
+            <div>
+              <span class="pkt-field"><span class="k">Method</span> <span class="v">${escapeHTML(http.method)}</span></span>
+              <span class="pkt-field"><span class="k">Path</span> <span class="v">${escapeHTML(http.path)}</span></span>
+              <span class="pkt-field"><span class="k">Version</span> <span class="v">${escapeHTML(http.version)}</span></span>
+              <span class="pkt-field"><span class="k">Host</span> <span class="v">${escapeHTML(http.host)}</span></span>
+              <table class="info-table" style="margin-top:0.5rem;"><tbody>${hdrRows}</tbody></table>
+              <div class="pkt-note">${escapeHTML(http.note)}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  </script>
 </body>
 </html>

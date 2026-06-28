@@ -7,40 +7,32 @@
 - **运行时**: Cloudflare Workers + Workers Assets
 - **前端**: 纯 HTML/CSS/JS（零框架、零构建）
 - **部署**: `wrangler deploy`
+- **域名**: https://lyra4.icu
 
 ## 项目结构
 
 ```
 src/index.js          — Worker 入口（API 路由 + Assets fallback）
-public/               — 静态资源（HTML/CSS/JS/图片）
+public/               — 静态资源
   ├── index.html      — 首页
-  ├── blog.html       — 博客列表
-  ├── blog/           — 博客文章
-  ├── networking/     — 计网知识演示页面
-  └── assets/         — CSS/JS/图片
-wrangler.toml         — Cloudflare Workers 配置
+  ├── networking/     — 技术栈（含数据包解析 + 4 个演示）
+  └── assets/         — CSS/JS
+wrangler.toml
 ```
 
 ## 构建和部署
 
 ```bash
-# 本地开发
-npm run dev           # 等价于 wrangler dev，启动 localhost:8787
-
-# 部署到 Cloudflare
-npm run deploy        # 等价于 wrangler deploy
+npm run dev           # wrangler dev → localhost:8787
+npm run deploy        # wrangler deploy → Cloudflare
 ```
 
 ## API 端点
 
 | 路径 | 说明 |
 |------|------|
-| `/api/hello` | Hello World，演示 Serverless 请求/响应 |
+| `/api/hello` | Serverless 请求响应演示 |
 | `/api/dns-lookup?domain=...&type=...` | DNS-over-HTTPS 加密查询 |
-| `/api/cache-demo?strategy=...&count=...` | HTTP 缓存策略演示（6 种） |
-| `/api/geo` | 边缘节点/网络信息（request.cf） |
-
-## 域名
-
-- Workers.dev: `https://computer-networking-demo.2453889.workers.dev`
-- 自定义域: `https://lyra4.icu`（通过 `[[routes]]` 绑定）
+| `/api/cache-demo?strategy=...&count=...` | HTTP 缓存策略（6 种） |
+| `/api/geo` | 边缘节点/网络信息 |
+| `/api/packet-inspect` | 自暴露：IP→TCP→TLS→HTTP 全层解析 |

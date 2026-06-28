@@ -19,6 +19,7 @@ export default {
     if (path === "/api/dns-lookup") return handleDnsLookup(url);
     if (path === "/api/cache-demo")  return handleCacheDemo(request, url);
     if (path === "/api/geo")     return handleGeo(request);
+    if (path === "/api/packet-inspect") return handlePacketInspect(request);
 
     // ── 静态文件 → Workers Assets ──
     try {
@@ -125,6 +126,58 @@ function handleGeo(request) {
     tlsVersion: cf.tlsVersion || "未知",
     tlsCipher: cf.tlsCipher || "未知",
     _devNote: cf.colo ? null : "⚠ 本地 dev 不注入 cf 数据，部署后可看真实信息。",
+  });
+}
+
+// ═══════════════════════════════════════════════
+// API Handler: /api/packet-inspect — 自暴露数据包解析
+// ═══════════════════════════════════════════════
+function handlePacketInspect(request) {
+  const cf = request.cf || {};
+  const url = new URL(request.url);
+
+  // 收集所有 HTTP 请求头
+  const httpHeaders = {};
+  for (const [k, v] of request.headers.entries()) {
+    httpHeaders[k] = v;
+  }
+
+  return json({
+    // ── IP 层 ──
+    ip: {
+      src: request.headers.get("CF-Connecting-IP") || "N/A",
+      dst: url.hostname,
+      protocol: "TCP (6)",
+      version: 4,
+      headerLength: "20 bytes",
+      ttl: "—（边缘节点已终结）",
+      note: "源 IP 来自 CF-Connecting-IP 头；目的 IP 为本 Worker 域名。TTL 在 Cloudflare 边缘被终结。",
+    },
+    // ── TCP 层 ──
+    tcp: {
+      srcPort: "—（不在 Worker 层暴露）",
+      dstPort: 443,
+      flags: ["ACK", "PSH"],
+      headerLength: "20 bytes",
+      note: "TCP 连接在 Cloudflare 边缘终结（SSL Termination），Worker 收到的已是解析后的 HTTP 请求。",
+    },
+    // ── TLS 层 ──
+    tls: {
+      version: cf.tlsVersion || "TLSv1.3",
+      cipher: cf.tlsCipher || "—",
+      note: "客户端到 Cloudflare 边缘的 TLS 加密；CF 用 request.cf 透传加密参数给 Worker。",
+    },
+    // ── HTTP 层 ──
+    http: {
+      method: request.method,
+      path: url.pathname + url.search,
+      version: cf.httpProtocol || "HTTP/1.1",
+      host: url.host,
+      headers: httpHeaders,
+      note: "这是 Worker 收到的完整 HTTP 请求，经过了 IP→TCP→TLS 逐层解封装。",
+    },
+    // ── 时间线 ──
+    serverTime: new Date().toISOString(),
   });
 }
 
