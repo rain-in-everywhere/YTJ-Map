@@ -83,11 +83,42 @@
         </a>
       </div>
     </section>
+
+    <section style="margin-top: 2.5rem;">
+      <h2 style="margin-bottom: 1rem;">🔌 快速 API 测试</h2>
+      <div class="card">
+        <p style="color: var(--color-text-muted); margin-bottom: 1rem;">
+          点击按钮直接调用 Serverless API，响应由 Worker 在边缘节点生成。
+        </p>
+        <div class="demo-controls">
+          <button class="btn" onclick="testAPI('/api/hello')">GET /api/hello</button>
+          <button class="btn" onclick="testAPI('/api/geo')">GET /api/geo</button>
+          <button class="btn btn-accent" onclick="testAPI('/api/dns-lookup?domain=cloudflare.com')">
+            DNS 查询 cloudflare.com
+          </button>
+        </div>
+        <div id="quick-api-result" class="result-box" style="margin-top: 1rem; min-height: 80px;">
+          <span style="color: var(--color-text-muted);">点击上方按钮查看 API 响应…</span>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="footer">
     <p>lyra4 · Powered by <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a></p>
   </footer>
   <script src="/assets/js/main.js"></script>
+  <script>
+    async function testAPI(url) {
+      const resultBox = document.getElementById("quick-api-result");
+      resultBox.innerHTML = '<span style="color: var(--color-text-muted);">⏳ 请求中…</span>';
+      const { data, error, response } = await fetchJSON(url);
+      if (error) {
+        resultBox.innerHTML = '<div class="status-line"><span class="status-badge error">✗ Error</span></div>' + escapeHTML(error);
+        return;
+      }
+      displayResult("quick-api-result", data, response.status);
+    }
+  </script>
 </body>
 </html>

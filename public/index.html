@@ -3,13 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>lyra4 — Serverless 网站</title>
-  <meta name="description" content="计算机网络课程大作业 — 基于 Cloudflare Workers 的 Serverless 网站，演示 CDN、DNS、HTTP 缓存等核心计网概念">
+  <title>lyra4</title>
   <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
-
-  <!-- ═══ 导航栏 ═══ -->
   <nav class="nav">
     <div class="nav-inner">
       <a href="/" class="nav-brand">lyra4</a>
@@ -21,162 +18,16 @@
     </div>
   </nav>
 
-  <!-- ═══ 主要内容 ═══ -->
   <main class="container">
-
-    <!-- Hero -->
-    <section class="hero">
-      <h1>计算机网络 · Serverless 实践</h1>
-      <p class="subtitle">
-        基于 <strong>Cloudflare Workers</strong> 搭建的 Serverless 网站。
-        从零实现 Web 服务，深入理解 CDN、DNS、HTTP 缓存、TLS 加密等核心计网概念。
-      </p>
-    </section>
-
-    <!-- 项目介绍 -->
-    <section class="card" style="margin-bottom: 2rem;">
-      <h2>📖 关于本项目</h2>
-      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
-        本项目是<strong>计算机网络课程大作业</strong>，使用 Cloudflare Workers 构建了一个完整的 Serverless 网站。
-        不同于传统的服务器部署，Worker 运行在 Cloudflare 全球 330+ 个边缘节点上，
-        就近响应用户请求，天然具备 CDN 加速和高可用能力。
-      </p>
-      <p style="color: var(--color-text-muted);">
-        网站本身就是一个计网实验场：每个页面、每次 API 调用都在展示网络协议的工作原理。
-        打开浏览器的 <strong>DevTools → Network</strong> 面板，你将看到 HTTP 请求/响应的完整细节。
-      </p>
-    </section>
-
-    <!-- 演示入口卡片 -->
-    <h2 style="margin-bottom: 1rem;">🧪 计网概念演示</h2>
-    <div class="card-grid">
-
-      <!-- CDN -->
-      <a href="/networking/cdn-edge.html" class="card" style="text-decoration: none; color: inherit;">
-        <h3>🌍 CDN 与边缘计算</h3>
-        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-          查看你的请求命中了哪个 Cloudflare 边缘节点（colo），
-          了解 CDN 如何通过就近服务降低延迟。
-        </p>
-        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
-          涉及概念：CDN · 边缘节点 · Anycast · TLS
-        </div>
-      </a>
-
-      <!-- HTTP 缓存 -->
-      <a href="/networking/http-caching.html" class="card" style="text-decoration: none; color: inherit;">
-        <h3>⚡ HTTP 缓存策略</h3>
-        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-          交互式对比 6 种 Cache-Control 策略，观察 ETag 条件请求和 304 响应。
-          直观感受 HTTP 缓存如何提升 Web 性能。
-        </p>
-        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
-          涉及概念：Cache-Control · ETag · 304 · 条件请求
-        </div>
-      </a>
-
-      <!-- DNS -->
-      <a href="/networking/dns.html" class="card" style="text-decoration: none; color: inherit;">
-        <h3>🔍 DNS 解析</h3>
-        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-          使用 DNS-over-HTTPS (DoH) 加密查询任意域名的 DNS 记录。
-          支持 A、AAAA、CNAME、MX、TXT、NS 等常见记录类型。
-        </p>
-        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
-          涉及概念：DNS · DoH · 记录类型 · 域名层次
-        </div>
-      </a>
-
-      <!-- Serverless -->
-      <a href="/networking/serverless.html" class="card" style="text-decoration: none; color: inherit;">
-        <h3>⚙️ Serverless 计算</h3>
-        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-          了解 Cloudflare Workers 的 V8 Isolate 执行模型，
-          对比冷启动与热启动的响应时间差异。
-        </p>
-        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
-          涉及概念：FaaS · V8 Isolate · 冷启动 · 边缘执行
-        </div>
-      </a>
-
+    <div class="hero">
+      <h1>lyra4</h1>
+      <p class="subtitle">Powered by Cloudflare Workers</p>
     </div>
-
-    <!-- 快速 API 测试 -->
-    <section style="margin-top: 2.5rem;">
-      <h2 style="margin-bottom: 1rem;">🔌 快速 API 测试</h2>
-      <div class="card">
-        <p style="color: var(--color-text-muted); margin-bottom: 1rem;">
-          点击按钮直接调用 Serverless API，响应由 Worker 在边缘节点生成。
-        </p>
-        <div class="demo-controls">
-          <button class="btn" onclick="testAPI('/api/hello')">GET /api/hello</button>
-          <button class="btn" onclick="testAPI('/api/geo')">GET /api/geo</button>
-          <button class="btn btn-accent" onclick="testAPI('/api/dns-lookup?domain=cloudflare.com')">
-            DNS 查询 cloudflare.com
-          </button>
-        </div>
-        <div id="quick-api-result" class="result-box" style="margin-top: 1rem; min-height: 80px;">
-          <span style="color: var(--color-text-muted);">点击上方按钮查看 API 响应…</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- 技术栈 -->
-    <section style="margin-top: 2.5rem;">
-      <h2 style="margin-bottom: 1rem;">🛠 技术栈与架构</h2>
-      <div class="card-grid">
-        <div class="card">
-          <h3>边缘计算</h3>
-          <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-            Cloudflare Workers 运行在 V8 Isolate 中，
-            无冷启动容器开销，全球 330+ 边缘节点就近响应。
-          </p>
-        </div>
-        <div class="card">
-          <h3>Serverless</h3>
-          <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-            无需管理服务器、无需运维。代码部署到边缘网络后自动扩展，
-            按请求量计费（免费额度 10万次/天）。
-          </p>
-        </div>
-        <div class="card">
-          <h3>HTTPS 全链路</h3>
-          <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-            Cloudflare 自动签发 SSL 证书，用户→边缘→源站全程 TLS 加密。
-            支持 HTTP/2 和 HTTP/3 (QUIC)。
-          </p>
-        </div>
-        <div class="card">
-          <h3>零框架</h3>
-          <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-            纯 HTML/CSS/JS，零构建步骤。
-            每个 HTTP 请求都在你的掌控之中——这正是本课程的学习目标。
-          </p>
-        </div>
-      </div>
-    </section>
-
   </main>
 
-  <!-- ═══ 页脚 ═══ -->
   <footer class="footer">
-    <p>计算机网络课程大作业 · Powered by <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a></p>
-    <p style="margin-top: 0.25rem;">部署在 Cloudflare 全球边缘网络 · 自带 CDN + HTTPS</p>
+    <p>Powered by <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a></p>
   </footer>
-
   <script src="/assets/js/main.js"></script>
-  <script>
-    // 首页快速 API 测试
-    async function testAPI(url) {
-      const resultBox = document.getElementById("quick-api-result");
-      resultBox.innerHTML = '<span style="color: var(--color-text-muted);">⏳ 请求中…</span>';
-      const { data, error, response } = await fetchJSON(url);
-      if (error) {
-        resultBox.innerHTML = `<div class="status-line"><span class="status-badge error">✗ Error</span></div>${escapeHTML(error)}`;
-        return;
-      }
-      displayResult("quick-api-result", data, response.status);
-    }
-  </script>
 </body>
 </html>
