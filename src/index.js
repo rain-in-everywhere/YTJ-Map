@@ -179,15 +179,7 @@ function handlePacketInspect(request) {
       ttl: "—（边缘节点已终结）",
       note: "源 IP 来自 CF-Connecting-IP；真实 TTL/DF 等 IP 头字段在边缘被剥离。",
     },
-    // ── TCP 层 ──
-    tcp: {
-      srcPort: "—（不在 Worker 层暴露）",
-      dstPort: 443,
-      flags: ["ACK", "PSH"],
-      headerLength: "20 bytes",
-      note: "TCP 连接在 Cloudflare 边缘终结（SSL Termination）。",
-    },
-    // ── TLS 层 ──
+// ── TLS 层 ──
     tls: {
       version: cf.tlsVersion || "TLSv1.3",
       cipher: cf.tlsCipher || "—",

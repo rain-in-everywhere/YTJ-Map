@@ -166,11 +166,7 @@ function buildPacketDetail(e) {
       <span class="lbl">IP</span>
       <div class="pkt-hdr"><span><span class="k">源</span> <span class="v">${escapeHTML(ip.src)}</span></span><span><span class="k">目的</span> <span class="v">${escapeHTML(ip.dst)}</span></span><span><span class="k">协议</span> <span class="v">TCP</span></span></div>
     </div>
-    <div class="pkt-layer pkt-tcp">
-      <span class="lbl">TCP</span>
-      <div class="pkt-hdr"><span><span class="k">端口</span> <span class="v">→ ${tcp.dstPort}</span></span><span><span class="k">Flags</span> <span class="v">ACK,PSH</span></span></div>
-    </div>
-    <div class="pkt-layer pkt-tls">
+<div class="pkt-layer pkt-tls">
       <span class="lbl">TLS</span>
       <div class="pkt-hdr"><span><span class="k">${escapeHTML(tls.version)}</span> <span class="v">${escapeHTML(tls.cipher)}</span></span></div>
     </div>
