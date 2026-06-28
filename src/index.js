@@ -117,7 +117,7 @@ function handleGeo(request) {
   const cf = request.cf || {};
   return json({
     colo: cf.colo || "未知（本地开发不注入 cf 数据）",
-    coloNote: "IATA 代码：LAX=洛杉矶, NRT=东京, FRA=法兰克福, HKG=香港",
+    coloNote: "IATA 代码：LAX=洛杉矶, NRT=东京, FRA=法兰克福, HKG=香港, SIN=新加坡",
     asn: cf.asn || "未知",
     asnNote: cf.asn ? `AS${cf.asn} — 你的 ISP/网络` : "",
     httpProtocol: cf.httpProtocol || "未知",
