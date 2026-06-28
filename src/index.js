@@ -211,7 +211,6 @@ function coloName(code) {
   const m = { LAX:"洛杉矶", NRT:"东京", FRA:"法兰克福", HKG:"香港", SIN:"新加坡", LHR:"伦敦", AMS:"阿姆斯特丹", SYD:"悉尼", GRU:"圣保罗", MXP:"米兰", CDG:"巴黎", DME:"莫斯科", BOM:"孟买", ICN:"首尔", KIX:"大阪" };
   return m[code] || code || "?";
 }
-}
 
 // ═══════════════════════════════════════════════
 // 工具函数

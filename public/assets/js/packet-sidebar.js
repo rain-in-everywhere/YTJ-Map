@@ -1,30 +1,84 @@
 /**
- * 侧边栏 — 请求数据包实时监控
- * 拦截所有 fetch 到 /api/* 的请求，在侧边栏显示 IP→TCP→TLS→HTTP 层解析
+ * 侧边栏 — 请求数据包实时监控（sessionStorage 持久化）
+ * 拦截所有 fetch 到 /api/* 的请求，历史跨页面导航保留
  */
 
-// 全局基础网络信息（页面加载时获取一次，所有请求共用 IP/TCP/TLS 层）
+const STORAGE_KEY_BASE = "pkt_base";
+const STORAGE_KEY_LIST = "pkt_list";
+
 let basePacket = null;
+let entries = [];
 let reqCounter = 0;
 
-// ── 初始化：获取基础网络层信息 ──
+// ── 初始化 ──
 (async function init() {
+  // 从 sessionStorage 恢复历史
+  const savedBase = sessionStorage.getItem(STORAGE_KEY_BASE);
+  const savedList = sessionStorage.getItem(STORAGE_KEY_LIST);
+
+  if (savedBase) basePacket = JSON.parse(savedBase);
+  if (savedList) entries = JSON.parse(savedList);
+
+  // 获取/刷新基础网络信息
   const res = await fetch("/api/packet-inspect").catch(() => null);
-  if (res && res.ok) basePacket = await res.json();
-  addSidebarEntry({
-    method: "PAGE",
-    path: window.location.pathname,
-    status: 200,
-    ms: 0,
-    hdrs: {},
-    note: "页面加载 — 以下为你的网络层基础信息",
-  });
-  // 标记为页面加载，直接展开
-  const last = document.querySelector(".req-item:last-child .req-detail");
-  if (last) last.classList.add("open");
-  // 注入 fetch 拦截
+  if (res && res.ok) {
+    basePacket = await res.json();
+    sessionStorage.setItem(STORAGE_KEY_BASE, JSON.stringify(basePacket));
+  }
+
+  // 只在首次（没有保存历史）时添加 PAGE 条目
+  if (entries.length === 0) {
+    entries.push({ method: "PAGE", path: location.pathname, status: 200, ms: 0, hdrs: {} });
+    persistList();
+  } else {
+    // 添加当前页面访问条目
+    entries.push({ method: "PAGE", path: location.pathname, status: 200, ms: 0, hdrs: {} });
+    persistList();
+  }
+
+  renderAll();
   injectInterceptor();
+
+  // 自动展开最后一条
+  const all = document.querySelectorAll(".req-item:last-child .req-detail");
+  if (all.length) all[all.length - 1].classList.add("open");
 })();
+
+// ── 持久化 ──
+function persistList() {
+  try {
+    sessionStorage.setItem(STORAGE_KEY_LIST, JSON.stringify(entries.slice(-50))); // 保留最近 50 条
+  } catch { /* quota exceeded, drop oldest */ }
+}
+
+// ── 渲染全部 ──
+function renderAll() {
+  const list = document.getElementById("req-list");
+  list.innerHTML = "";
+  if (entries.length === 0) {
+    list.innerHTML = '<span style="color: var(--color-text-muted); font-size: 0.78rem;">等待请求…</span>';
+    return;
+  }
+  entries.forEach((e, i) => {
+    const cls = e.status >= 200 && e.status < 300 ? "s2xx" : e.status >= 300 && e.status < 400 ? "s3xx" : "s4xx";
+    const item = document.createElement("div");
+    item.className = "req-item";
+    item.innerHTML = `
+      <div class="req-summary" onclick="toggleReq(this)">
+        <span class="req-num">#${i + 1}</span>
+        <span class="req-method">${escapeHTML(e.method)}</span>
+        <span class="req-path">${escapeHTML(e.path)}</span>
+        <span class="req-status ${cls}">${e.status}</span>
+        <span class="req-time">${e.ms ? e.ms + "ms" : "—"}</span>
+        <span class="req-expand">▸</span>
+      </div>
+      <div class="req-detail">${buildPacketDetail(e)}</div>
+    `;
+    list.appendChild(item);
+  });
+  list.scrollTop = list.scrollHeight;
+  reqCounter = entries.length;
+}
 
 // ── 拦截 fetch ──
 function injectInterceptor() {
@@ -32,61 +86,55 @@ function injectInterceptor() {
   window.fetch = function (input, init) {
     const url = typeof input === "string" ? input : input.url;
     const method = (init?.method || "GET").toUpperCase();
-
-    // 只拦截我们自己 API 的请求；跳过 packet-inspect 避免递归
     if (!url.includes("/api/") || url.includes("/api/packet-inspect")) {
       return origFetch.apply(this, arguments);
     }
-
     const start = performance.now();
     return origFetch.apply(this, arguments).then(async (response) => {
       const ms = Math.round(performance.now() - start);
       const path = new URL(url, location.origin).pathname + new URL(url, location.origin).search;
-
-      // 收集响应头
       const hdrs = {};
       response.headers.forEach((v, k) => { hdrs[k] = v; });
-
-      addSidebarEntry({ method, path, status: response.status, ms, hdrs });
+      addEntry({ method, path, status: response.status, ms, hdrs });
       return response;
     });
   };
 }
 
-// ── 添加一条请求到侧边栏 ──
-function addSidebarEntry({ method, path, status, ms, hdrs }) {
-  reqCounter++;
+// ── 添加条目 ──
+function addEntry(e) {
+  entries.push(e);
+  persistList();
+  // 增量渲染：只追加新条目到 DOM
   const list = document.getElementById("req-list");
-  if (reqCounter === 1) list.innerHTML = "";
-
-  const cls = status >= 200 && status < 300 ? "s2xx" : status >= 300 && status < 400 ? "s3xx" : "s4xx";
-  const rtime = ms ? `${ms}ms` : "—";
-
+  if (entries.length === 1) list.innerHTML = "";
+  reqCounter = entries.length;
+  const cls = e.status >= 200 && e.status < 300 ? "s2xx" : e.status >= 300 && e.status < 400 ? "s3xx" : "s4xx";
   const item = document.createElement("div");
   item.className = "req-item";
   item.innerHTML = `
     <div class="req-summary" onclick="toggleReq(this)">
       <span class="req-num">#${reqCounter}</span>
-      <span class="req-method">${escapeHTML(method)}</span>
-      <span class="req-path">${escapeHTML(path)}</span>
-      <span class="req-status ${cls}">${status}</span>
-      <span class="req-time">${rtime}</span>
+      <span class="req-method">${escapeHTML(e.method)}</span>
+      <span class="req-path">${escapeHTML(e.path)}</span>
+      <span class="req-status ${cls}">${e.status}</span>
+      <span class="req-time">${e.ms ? e.ms + "ms" : "—"}</span>
       <span class="req-expand">▸</span>
     </div>
-    <div class="req-detail">${buildPacketDetail(method, path, status, ms, hdrs)}</div>
+    <div class="req-detail">${buildPacketDetail(e)}</div>
   `;
   list.appendChild(item);
   list.scrollTop = list.scrollHeight;
 }
 
-// ── 构建路由追踪 + 数据包分层详情 ──
-function buildPacketDetail(method, path, status, ms, hdrs) {
+// ── 构建协议栈详情 ──
+function buildPacketDetail(e) {
   const ip = basePacket?.ip || { src: "—", dst: location.hostname, protocol: "TCP", version: 4, headerLength: "20 bytes", ttl: "—" };
   const tcp = basePacket?.tcp || { srcPort: "—", dstPort: 443, flags: ["ACK","PSH"], headerLength: "20 bytes" };
   const tls = basePacket?.tls || { version: "TLSv1.3", cipher: "—" };
   const route = basePacket?.route || null;
+  const hdrs = e.hdrs || {};
 
-  // 路由追踪图
   let routeHtml = "";
   if (route) {
     routeHtml = `
@@ -103,57 +151,38 @@ function buildPacketDetail(method, path, status, ms, hdrs) {
       <div style="text-align:center;color:var(--color-text-muted);margin:0.15rem 0;">⬆ 响应原路返回</div>
       <div style="display:flex;align-items:center;gap:0.3rem;">
         <span style="color:var(--color-accent);font-weight:700;">🖥 你</span>
-        <span style="color:var(--color-text-muted);">收到 ${status} · ${ms}ms</span>
+        <span style="color:var(--color-text-muted);">收到 ${e.status} · ${e.ms}ms</span>
       </div>
     </div>`;
   }
 
-  // HTTP 响应头摘要
   let hdrRows = "";
-  const keyHdrs = ["cache-control", "etag", "x-strategy", "x-response-time-ms", "x-edge-location", "x-powered-by", "content-type"];
-  keyHdrs.forEach(k => {
+  ["cache-control", "etag", "x-strategy", "x-response-time-ms", "x-edge-location", "x-powered-by", "content-type"].forEach(k => {
     if (hdrs[k]) hdrRows += `<span class="pkt-hdr"><span class="k">${escapeHTML(k)}</span> <span class="v">${escapeHTML(hdrs[k])}</span></span>`;
   });
 
   return routeHtml + `
     <div class="pkt-layer pkt-ip">
       <span class="lbl">IP</span>
-      <div class="pkt-hdr">
-        <span><span class="k">源</span> <span class="v">${escapeHTML(ip.src)}</span></span>
-        <span><span class="k">目的</span> <span class="v">${escapeHTML(ip.dst)}</span></span>
-        <span><span class="k">协议</span> <span class="v">${escapeHTML(ip.protocol)}</span></span>
-        <span><span class="k">TTL</span> <span class="v">${escapeHTML(ip.ttl)}</span></span>
-      </div>
+      <div class="pkt-hdr"><span><span class="k">源</span> <span class="v">${escapeHTML(ip.src)}</span></span><span><span class="k">目的</span> <span class="v">${escapeHTML(ip.dst)}</span></span><span><span class="k">协议</span> <span class="v">TCP</span></span></div>
     </div>
     <div class="pkt-layer pkt-tcp">
       <span class="lbl">TCP</span>
-      <div class="pkt-hdr">
-        <span><span class="k">端口</span> <span class="v">→ ${tcp.dstPort}</span></span>
-        <span><span class="k">Flags</span> <span class="v">${(tcp.flags||[]).join(",")}</span></span>
-      </div>
+      <div class="pkt-hdr"><span><span class="k">端口</span> <span class="v">→ ${tcp.dstPort}</span></span><span><span class="k">Flags</span> <span class="v">ACK,PSH</span></span></div>
     </div>
     <div class="pkt-layer pkt-tls">
       <span class="lbl">TLS</span>
-      <div class="pkt-hdr">
-        <span><span class="k">版本</span> <span class="v">${escapeHTML(tls.version)}</span></span>
-        <span><span class="k">加密</span> <span class="v">${escapeHTML(tls.cipher)}</span></span>
-      </div>
+      <div class="pkt-hdr"><span><span class="k">${escapeHTML(tls.version)}</span> <span class="v">${escapeHTML(tls.cipher)}</span></span></div>
     </div>
     <div class="pkt-layer pkt-http">
       <span class="lbl">HTTP</span>
-      <div class="pkt-hdr">
-        <span><span class="k">${escapeHTML(method)}</span> <span class="v">${escapeHTML(path)}</span></span>
-        <span><span class="k">→</span> <span class="v">${status} · ${ms}ms</span></span>
-        ${hdrRows}
-      </div>
+      <div class="pkt-hdr"><span><span class="k">${escapeHTML(e.method)}</span> <span class="v">${escapeHTML(e.path)}</span></span><span><span class="k">→</span> <span class="v">${e.status} · ${e.ms}ms</span></span>${hdrRows}</div>
     </div>
   `;
 }
 
-// ── 展开/折叠 ──
-function toggleReq(summary) {
-  const detail = summary.nextElementSibling;
-  const arrow = summary.querySelector(".req-expand");
-  detail.classList.toggle("open");
-  arrow.textContent = detail.classList.contains("open") ? "▾" : "▸";
+function toggleReq(s) {
+  const d = s.nextElementSibling;
+  d.classList.toggle("open");
+  s.querySelector(".req-expand").textContent = d.classList.contains("open") ? "▾" : "▸";
 }
