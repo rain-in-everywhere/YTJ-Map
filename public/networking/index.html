@@ -80,19 +80,7 @@
         <div id="cdn-result" style="margin-top: 0.75rem;"><span style="color: var(--color-text-muted);">点击按钮…</span></div>
       </section>
 
-      <section class="card">
-        <h2>⚡ HTTP 缓存策略</h2>
-        <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">不同 Cache-Control 下浏览器的缓存行为。打开 DevTools Network 观察。</p>
-        <div class="demo-controls">
-          <select id="cache-strategy">
-            <option value="no-store">no-store</option><option value="no-cache">no-cache</option>
-            <option value="max-age-10">max-age=10</option><option value="max-age-60">max-age=60</option>
-            <option value="etag">ETag</option><option value="immutable">immutable</option>
-          </select>
-          <button class="btn" onclick="sendCacheRequest()">发送请求</button>
-        </div>
-        <div id="cache-result" style="margin-top: 0.75rem;"><span style="color: var(--color-text-muted);">选择策略…</span></div>
-      </section>
+
 
       <section class="card">
         <h2>🔍 DNS 解析</h2>
@@ -130,7 +118,6 @@
   <script src="/assets/js/main.js"></script>
   <script src="/assets/js/packet-sidebar.js"></script>
   <script src="/assets/js/cdn-demo.js"></script>
-  <script src="/assets/js/cache-demo.js"></script>
-  <script src="/assets/js/dns-demo.js"></script>
+    <script src="/assets/js/dns-demo.js"></script>
   </body>
 </html>
