@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>计网知识 — lyra4</title>
+  <title>技术栈 — lyra4</title>
   <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -12,98 +12,98 @@
       <a href="/" class="nav-brand">lyra4</a>
       <div class="nav-links">
         <a href="/">首页</a>
-        <a href="/networking/">计网知识</a>
+        <a href="/networking/">技术栈</a>
       </div>
     </div>
   </nav>
 
   <main class="container">
     <div class="hero">
-      <h1>🌐 计算机网络知识</h1>
-      <p class="subtitle">通过四个交互式演示，深入理解 CDN、DNS、HTTP 缓存和 Serverless 的核心原理</p>
+      <h1>技术栈</h1>
+      <p class="subtitle">Cloudflare Workers · CDN · 缓存 · DNS · Serverless</p>
     </div>
 
-    <div class="card-grid" style="margin-top: 0;">
-
-      <a href="/networking/cdn-edge.html" class="card" style="text-decoration: none; color: inherit;">
-        <h3>🌍 CDN 与边缘计算</h3>
-        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-          查看你的请求命中了哪个边缘节点（colo），理解 CDN 如何通过就近服务将延迟降低一个数量级。
-        </p>
-        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
-          CDN · 边缘节点 · Anycast · TLS
-        </div>
-      </a>
-
-      <a href="/networking/http-caching.html" class="card" style="text-decoration: none; color: inherit;">
-        <h3>⚡ HTTP 缓存策略</h3>
-        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-          交互式对比 6 种 Cache-Control 策略，观察 ETag 条件请求和 304 Not Modified 响应。
-        </p>
-        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
-          Cache-Control · ETag · 304 · 条件请求
-        </div>
-      </a>
-
-      <a href="/networking/dns.html" class="card" style="text-decoration: none; color: inherit;">
-        <h3>🔍 DNS 解析</h3>
-        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-          通过 DNS-over-HTTPS 加密查询任意域名的 DNS 记录，支持 A、AAAA、CNAME、MX、TXT、NS 等类型。
-        </p>
-        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
-          DNS · DoH · 记录类型 · 域名层次
-        </div>
-      </a>
-
-      <a href="/networking/serverless.html" class="card" style="text-decoration: none; color: inherit;">
-        <h3>⚙️ Serverless 计算</h3>
-        <p style="color: var(--color-text-muted); font-size: 0.9rem;">
-          了解 Cloudflare Workers 的 V8 Isolate 执行模型，对比冷/热启动性能差异。
-        </p>
-        <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--color-primary);">
-          FaaS · V8 Isolate · 冷启动 · 边缘执行
-        </div>
-      </a>
-
-    </div>
-
-    <section style="margin-top: 2.5rem;">
-
-    <section style="margin-top: 2.5rem;">
-      <h2 style="margin-bottom: 1rem;">🔌 快速 API 测试</h2>
-      <div class="card">
-        <p style="color: var(--color-text-muted); margin-bottom: 1rem;">
-          点击按钮直接调用 Serverless API，响应由 Worker 在边缘节点生成。
-        </p>
-        <div class="demo-controls">
-          <button class="btn" onclick="testAPI('/api/hello')">GET /api/hello</button>
-          <button class="btn" onclick="testAPI('/api/geo')">GET /api/geo</button>
-          <button class="btn btn-accent" onclick="testAPI('/api/dns-lookup?domain=cloudflare.com')">
-            DNS 查询 cloudflare.com
-          </button>
-        </div>
-        <div id="quick-api-result" class="result-box" style="margin-top: 1rem; min-height: 80px;">
-          <span style="color: var(--color-text-muted);">点击上方按钮查看 API 响应…</span>
-        </div>
+    <!-- ═══ 1. CDN ═══ -->
+    <section class="card">
+      <h2>🌍 CDN 与边缘计算</h2>
+      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
+        Cloudflare 全球 330+ 边缘节点。请求由离你最近的节点处理，大幅降低延迟。
+      </p>
+      <button class="btn" onclick="fetchGeo()">查询我的边缘节点</button>
+      <div id="cdn-result" style="margin-top: 0.75rem;">
+        <span style="color: var(--color-text-muted);">点击按钮查询…</span>
       </div>
     </section>
+
+    <!-- ═══ 2. HTTP 缓存 ═══ -->
+    <section class="card">
+      <h2>⚡ HTTP 缓存策略</h2>
+      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
+        不同 Cache-Control 策略下浏览器的缓存行为对比。打开 DevTools Network 观察。
+      </p>
+      <div class="demo-controls">
+        <select id="cache-strategy">
+          <option value="no-store">no-store</option>
+          <option value="no-cache">no-cache</option>
+          <option value="max-age-10">max-age=10</option>
+          <option value="max-age-60">max-age=60</option>
+          <option value="etag">ETag</option>
+          <option value="immutable">immutable</option>
+        </select>
+        <button class="btn" onclick="sendCacheRequest()">发送请求</button>
+      </div>
+      <div id="cache-result" style="margin-top: 0.75rem;">
+        <span style="color: var(--color-text-muted);">选择策略，点击发送…</span>
+      </div>
+    </section>
+
+    <!-- ═══ 3. DNS ═══ -->
+    <section class="card">
+      <h2>🔍 DNS 解析</h2>
+      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
+        DNS-over-HTTPS 加密查询，绕过运营商 DNS 劫持。支持 A / AAAA / CNAME / MX / TXT / NS。
+      </p>
+      <div class="demo-controls">
+        <input type="text" id="dns-domain" value="example.com" placeholder="域名">
+        <select id="dns-type">
+          <option value="A">A</option><option value="AAAA">AAAA</option>
+          <option value="CNAME">CNAME</option><option value="MX">MX</option>
+          <option value="TXT">TXT</option><option value="NS">NS</option>
+        </select>
+        <button class="btn" onclick="doDnsLookup()">查询</button>
+        <button class="btn btn-accent" onclick="quickLookup('cloudflare.com')">CF</button>
+        <button class="btn btn-accent" onclick="quickLookup('github.com')">GH</button>
+      </div>
+      <div id="dns-result" style="margin-top: 0.75rem;">
+        <span style="color: var(--color-text-muted);">输入域名，点击查询…</span>
+      </div>
+    </section>
+
+    <!-- ═══ 4. Serverless ═══ -->
+    <section class="card">
+      <h2>⚙️ Serverless 计算</h2>
+      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
+        Cloudflare Workers 基于 V8 Isolate，冷启动 &lt;5ms，无容器开销。
+      </p>
+      <div class="demo-controls">
+        <button class="btn" onclick="testMethod('GET')">GET /api/hello</button>
+        <button class="btn btn-accent" onclick="runPerfTest()">连续 5 次请求</button>
+      </div>
+      <div id="serverless-result" style="margin-top: 0.75rem;">
+        <span style="color: var(--color-text-muted);">点击按钮测试…</span>
+      </div>
+    </section>
+
   </main>
 
   <footer class="footer">
-    <p>lyra4 · Powered by <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a></p>
+    <p>Powered by <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a></p>
   </footer>
+
   <script src="/assets/js/main.js"></script>
-  <script>
-    async function testAPI(url) {
-      const resultBox = document.getElementById("quick-api-result");
-      resultBox.innerHTML = '<span style="color: var(--color-text-muted);">⏳ 请求中…</span>';
-      const { data, error, response } = await fetchJSON(url);
-      if (error) {
-        resultBox.innerHTML = '<div class="status-line"><span class="status-badge error">✗ Error</span></div>' + escapeHTML(error);
-        return;
-      }
-      displayResult("quick-api-result", data, response.status);
-    }
-  </script>
+  <script src="/assets/js/cdn-demo.js"></script>
+  <script src="/assets/js/cache-demo.js"></script>
+  <script src="/assets/js/dns-demo.js"></script>
+  <script src="/assets/js/serverless-demo.js"></script>
 </body>
 </html>

@@ -36,9 +36,7 @@ function handleHello(request) {
   return json({
     message: "Hello from Cloudflare Worker!",
     method: request.method,
-    timestamp: new Date().toISOString(),
     runtime: "Cloudflare Workers (V8 Isolate)",
-    note: "此响应由边缘节点生成，运行在离你最近的 Cloudflare 数据中心。",
   });
 }
 
@@ -62,11 +60,9 @@ async function handleDnsLookup(url) {
     return json({
       domain, recordType: type,
       results: dnsData.Answer || [],
-      authority: dnsData.Authority || [],
       status: dnsData.Status === 0 ? "NOERROR" : `错误码 ${dnsData.Status}`,
-      resolver: "Cloudflare 1.1.1.1 (DNS-over-HTTPS)",
-      dnsProtocol: "DoH — 加密的 DNS 查询",
-      note: dnsRecordNote(type),
+      resolver: "Cloudflare 1.1.1.1 (DoH)",
+      dnsProtocol: "DNS over HTTPS — 加密查询",
     });
   } catch (err) {
     return json({ error: "DNS 查询异常", message: err.message }, 500);
@@ -92,9 +88,6 @@ function handleCacheDemo(request, url) {
   const cfg = strategies[strategy] || strategies["no-cache"];
   const data = {
     strategy, appliedHeaders: cfg.h, description: cfg.d,
-    serverTime: new Date().toISOString(),
-    requestNumber: requestCount + 1, cacheHit: false,
-    tip: "打开 DevTools → Network，观察 Status 列和 Size 列。",
   };
 
   const headers = new Headers({
@@ -123,24 +116,15 @@ function handleCacheDemo(request, url) {
 function handleGeo(request) {
   const cf = request.cf || {};
   return json({
-    colo: cf.colo || "未知（本地开发环境不注入 cf 数据）",
-    coloNote: "Cloudflare 边缘数据中心 IATA 代码（LAX=洛杉矶, NRT=东京, FRA=法兰克福, HKG=香港）",
-    country: cf.country || "未知",
-    city: cf.city || "未知",
-    region: cf.region || "未知",
-    timezone: cf.timezone || "未知",
+    colo: cf.colo || "未知（本地开发不注入 cf 数据）",
+    coloNote: "IATA 代码：LAX=洛杉矶, NRT=东京, FRA=法兰克福, HKG=香港",
     asn: cf.asn || "未知",
-    asnNote: "ASN 标识你的 ISP/网络的自治系统编号",
+    asnNote: cf.asn ? `AS${cf.asn} — 你的 ISP/网络` : "",
     httpProtocol: cf.httpProtocol || "未知",
     protocolNote: "HTTP/1.1（文本）, HTTP/2（多路复用）, HTTP/3（QUIC/UDP）",
     tlsVersion: cf.tlsVersion || "未知",
     tlsCipher: cf.tlsCipher || "未知",
-    tlsNote: "TLS 加密客户端到 Cloudflare 边缘节点的传输。",
-    clientIP: request.headers.get("CF-Connecting-IP") || "未知",
-    userAgent: request.headers.get("User-Agent") || "未知",
-    edgeTime: new Date().toISOString(),
-    workerRuntime: "Cloudflare Workers (V8 Isolate)",
-    _devNote: cf.colo ? null : "⚠ 本地 dev 不注入 cf 数据，部署到 Cloudflare 后可看到真实边缘节点信息。",
+    _devNote: cf.colo ? null : "⚠ 本地 dev 不注入 cf 数据，部署后可看真实信息。",
   });
 }
 
@@ -158,9 +142,4 @@ function json(data, status = 200) {
       "X-Powered-By": "Cloudflare Workers",
     },
   });
-}
-
-function dnsRecordNote(type) {
-  const m = { A: "域名→IPv4", AAAA: "域名→IPv6", CNAME: "域名别名", MX: "邮件服务器", TXT: "文本记录（SPF/DKIM）", NS: "权威名称服务器" };
-  return m[type] || "DNS 记录";
 }
