@@ -6,21 +6,52 @@
   <title>技术栈 — lyra4</title>
   <link rel="stylesheet" href="/assets/css/style.css">
   <style>
-    .pkt-stack { font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.6; }
-    .pkt-layer { border: 1px solid; border-radius: 6px; padding: 0.75rem 0.75rem 0.75rem 2.5rem; margin: 0.25rem 0; position: relative; }
-    .pkt-layer .lbl { position: absolute; left: 0.5rem; top: 0.5rem; font-weight: 700; font-size: 0.7rem; text-transform: uppercase; }
-    .pkt-ip { border-color: #6366f1; background: rgba(99,102,241,0.06); }
-    .pkt-ip .lbl { color: #6366f1; }
-    .pkt-tcp { border-color: #0ea5e9; background: rgba(14,165,233,0.06); margin-left: 0.75rem; }
-    .pkt-tcp .lbl { color: #0ea5e9; }
-    .pkt-tls { border-color: #8b5cf6; background: rgba(139,92,246,0.06); margin-left: 1.5rem; }
-    .pkt-tls .lbl { color: #8b5cf6; }
-    .pkt-http { border-color: #10b981; background: rgba(16,185,129,0.06); margin-left: 2.25rem; }
-    .pkt-http .lbl { color: #10b981; }
-    .pkt-field { display: inline-block; margin-right: 1.25rem; }
-    .pkt-field .k { color: var(--color-text-muted); font-size: 0.75rem; }
-    .pkt-field .v { color: var(--color-text); font-weight: 600; }
-    .pkt-note { font-size: 0.75rem; color: var(--color-text-muted); font-style: italic; margin-top: 0.35rem; }
+    /* 页面布局：主内容 + 侧边栏 */
+    .page-layout { display: flex; max-width: 1200px; margin: 0 auto; }
+    .main-col { flex: 1; min-width: 0; padding: 1.5rem 1rem 4rem 1.5rem; }
+    .side-col { width: 400px; flex-shrink: 0; border-left: 1px solid var(--color-border); background: var(--color-surface); position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; padding: 1rem; }
+
+    /* 侧边栏内部 */
+    .side-title { font-weight: 700; font-size: 0.9rem; color: var(--color-primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    .side-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .req-list { display: flex; flex-direction: column; gap: 0.35rem; }
+    .req-item { border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden; font-size: 0.78rem; }
+    .req-summary { display: flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.6rem; cursor: pointer; transition: background 0.15s; user-select: none; }
+    .req-summary:hover { background: var(--color-surface-hover); }
+    .req-num { color: var(--color-text-muted); min-width: 1.5rem; font-size: 0.7rem; }
+    .req-method { font-weight: 700; color: var(--color-accent); min-width: 2.8rem; font-size: 0.7rem; }
+    .req-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); font-family: var(--font-mono); }
+    .req-status { font-weight: 600; min-width: 2.4rem; text-align: right; }
+    .req-status.s2xx { color: var(--color-success); }
+    .req-status.s3xx { color: var(--color-warning); }
+    .req-status.s4xx,.req-status.s5xx { color: var(--color-danger); }
+    .req-time { color: var(--color-text-muted); min-width: 3rem; text-align: right; font-size: 0.7rem; }
+    .req-expand { color: var(--color-text-muted); font-size: 0.65rem; min-width: 1rem; text-align: center; }
+
+    .req-detail { display: none; border-top: 1px solid var(--color-border); padding: 0.5rem; }
+    .req-detail.open { display: block; }
+
+    /* 侧边栏内的紧凑版 packet 层 */
+    .pkt-layer { border: 1px solid; border-radius: 4px; padding: 0.4rem 0.4rem 0.4rem 1.6rem; margin: 0.15rem 0; position: relative; font-family: var(--font-mono); font-size: 0.68rem; line-height: 1.5; }
+    .pkt-layer .lbl { position: absolute; left: 0.25rem; top: 0.3rem; font-weight: 700; font-size: 0.6rem; text-transform: uppercase; }
+    .pkt-ip { border-color: #6366f1; background: rgba(99,102,241,0.05); } .pkt-ip .lbl { color: #6366f1; }
+    .pkt-tcp { border-color: #0ea5e9; background: rgba(14,165,233,0.05); margin-left: 0.4rem; } .pkt-tcp .lbl { color: #0ea5e9; }
+    .pkt-tls { border-color: #8b5cf6; background: rgba(139,92,246,0.05); margin-left: 0.8rem; } .pkt-tls .lbl { color: #8b5cf6; }
+    .pkt-http { border-color: #10b981; background: rgba(16,185,129,0.05); margin-left: 1.2rem; } .pkt-http .lbl { color: #10b981; }
+    .pkt-hdr { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; }
+    .pkt-hdr span { white-space: nowrap; }
+    .pkt-hdr .k { color: var(--color-text-muted); font-size: 0.65rem; }
+    .pkt-hdr .v { color: var(--color-text); font-weight: 600; font-size: 0.7rem; }
+
+    /* 主内容区域适配 */
+    .main-col .hero { padding: 1.5rem 0 1rem; }
+    .main-col .hero h1 { font-size: 1.8rem; }
+
+    @media (max-width: 900px) {
+      .page-layout { flex-direction: column; }
+      .side-col { width: 100%; height: auto; max-height: 50vh; position: static; border-left: none; border-top: 1px solid var(--color-border); }
+    }
   </style>
 </head>
 <body>
@@ -34,167 +65,81 @@
     </div>
   </nav>
 
-  <main class="container">
-    <div class="hero">
-      <h1>技术栈</h1>
-      <p class="subtitle">Cloudflare Workers · CDN · 缓存 · DNS · Serverless</p>
+  <div class="page-layout">
+    <!-- ═══ 左侧主内容 ═══ -->
+    <div class="main-col">
+      <div class="hero">
+        <h1>技术栈</h1>
+        <p class="subtitle">Cloudflare Workers · CDN · 缓存 · DNS · Serverless</p>
+      </div>
+
+      <section class="card">
+        <h2>🌍 CDN 与边缘计算</h2>
+        <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">Cloudflare 全球 330+ 边缘节点，请求由最近的节点处理。</p>
+        <button class="btn" onclick="fetchGeo()">查询边缘节点</button>
+        <div id="cdn-result" style="margin-top: 0.75rem;"><span style="color: var(--color-text-muted);">点击按钮…</span></div>
+      </section>
+
+      <section class="card">
+        <h2>⚡ HTTP 缓存策略</h2>
+        <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">不同 Cache-Control 下浏览器的缓存行为。打开 DevTools Network 观察。</p>
+        <div class="demo-controls">
+          <select id="cache-strategy">
+            <option value="no-store">no-store</option><option value="no-cache">no-cache</option>
+            <option value="max-age-10">max-age=10</option><option value="max-age-60">max-age=60</option>
+            <option value="etag">ETag</option><option value="immutable">immutable</option>
+          </select>
+          <button class="btn" onclick="sendCacheRequest()">发送请求</button>
+        </div>
+        <div id="cache-result" style="margin-top: 0.75rem;"><span style="color: var(--color-text-muted);">选择策略…</span></div>
+      </section>
+
+      <section class="card">
+        <h2>🔍 DNS 解析</h2>
+        <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">DNS-over-HTTPS 加密查询。支持 A / AAAA / CNAME / MX / TXT / NS。</p>
+        <div class="demo-controls">
+          <input type="text" id="dns-domain" value="example.com" placeholder="域名">
+          <select id="dns-type">
+            <option value="A">A</option><option value="AAAA">AAAA</option>
+            <option value="CNAME">CNAME</option><option value="MX">MX</option>
+            <option value="TXT">TXT</option><option value="NS">NS</option>
+          </select>
+          <button class="btn" onclick="doDnsLookup()">查询</button>
+          <button class="btn btn-accent" onclick="quickLookup('cloudflare.com')">CF</button>
+          <button class="btn btn-accent" onclick="quickLookup('github.com')">GH</button>
+        </div>
+        <div id="dns-result" style="margin-top: 0.75rem;"><span style="color: var(--color-text-muted);">输入域名…</span></div>
+      </section>
+
+      <section class="card">
+        <h2>⚙️ Serverless 计算</h2>
+        <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">V8 Isolate，冷启动 &lt;5ms，无容器开销。</p>
+        <div class="demo-controls">
+          <button class="btn" onclick="testMethod('GET')">GET /api/hello</button>
+          <button class="btn btn-accent" onclick="runPerfTest()">连续 5 次请求</button>
+        </div>
+        <div id="serverless-result" style="margin-top: 0.75rem;"><span style="color: var(--color-text-muted);">点击测试…</span></div>
+      </section>
     </div>
 
-    <!-- ═══ 0. 自暴露：数据包解析 ═══ -->
-    <section class="card">
-      <h2>📦 本次请求的数据包解析</h2>
-      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
-        点击按钮，解析你当前请求的 IP → TCP → TLS → HTTP 各层封装信息。
-      </p>
-      <button class="btn" onclick="inspectPacket()">🔬 解析本次请求</button>
-      <div id="packet-result" style="margin-top: 1rem;">
-        <span style="color: var(--color-text-muted);">点击按钮查看你的请求在各协议层的封装详情…</span>
+    <!-- ═══ 右侧边栏：数据包实时监控 ═══ -->
+    <div class="side-col">
+      <div class="side-title"><span class="dot"></span> 请求数据包解析</div>
+      <div class="req-list" id="req-list">
+        <span style="color: var(--color-text-muted); font-size: 0.78rem;">等待请求…</span>
       </div>
-    </section>
-
-    <!-- ═══ 1. CDN ═══ -->
-    <section class="card">
-      <h2>🌍 CDN 与边缘计算</h2>
-      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
-        Cloudflare 全球 330+ 边缘节点。请求由离你最近的节点处理，大幅降低延迟。
-      </p>
-      <button class="btn" onclick="fetchGeo()">查询我的边缘节点</button>
-      <div id="cdn-result" style="margin-top: 0.75rem;">
-        <span style="color: var(--color-text-muted);">点击按钮查询…</span>
-      </div>
-    </section>
-
-    <!-- ═══ 2. HTTP 缓存 ═══ -->
-    <section class="card">
-      <h2>⚡ HTTP 缓存策略</h2>
-      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
-        不同 Cache-Control 策略下浏览器的缓存行为对比。打开 DevTools Network 观察。
-      </p>
-      <div class="demo-controls">
-        <select id="cache-strategy">
-          <option value="no-store">no-store</option>
-          <option value="no-cache">no-cache</option>
-          <option value="max-age-10">max-age=10</option>
-          <option value="max-age-60">max-age=60</option>
-          <option value="etag">ETag</option>
-          <option value="immutable">immutable</option>
-        </select>
-        <button class="btn" onclick="sendCacheRequest()">发送请求</button>
-      </div>
-      <div id="cache-result" style="margin-top: 0.75rem;">
-        <span style="color: var(--color-text-muted);">选择策略，点击发送…</span>
-      </div>
-    </section>
-
-    <!-- ═══ 3. DNS ═══ -->
-    <section class="card">
-      <h2>🔍 DNS 解析</h2>
-      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
-        DNS-over-HTTPS 加密查询，绕过运营商 DNS 劫持。支持 A / AAAA / CNAME / MX / TXT / NS。
-      </p>
-      <div class="demo-controls">
-        <input type="text" id="dns-domain" value="example.com" placeholder="域名">
-        <select id="dns-type">
-          <option value="A">A</option><option value="AAAA">AAAA</option>
-          <option value="CNAME">CNAME</option><option value="MX">MX</option>
-          <option value="TXT">TXT</option><option value="NS">NS</option>
-        </select>
-        <button class="btn" onclick="doDnsLookup()">查询</button>
-        <button class="btn btn-accent" onclick="quickLookup('cloudflare.com')">CF</button>
-        <button class="btn btn-accent" onclick="quickLookup('github.com')">GH</button>
-      </div>
-      <div id="dns-result" style="margin-top: 0.75rem;">
-        <span style="color: var(--color-text-muted);">输入域名，点击查询…</span>
-      </div>
-    </section>
-
-    <!-- ═══ 4. Serverless ═══ -->
-    <section class="card">
-      <h2>⚙️ Serverless 计算</h2>
-      <p style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
-        Cloudflare Workers 基于 V8 Isolate，冷启动 &lt;5ms，无容器开销。
-      </p>
-      <div class="demo-controls">
-        <button class="btn" onclick="testMethod('GET')">GET /api/hello</button>
-        <button class="btn btn-accent" onclick="runPerfTest()">连续 5 次请求</button>
-      </div>
-      <div id="serverless-result" style="margin-top: 0.75rem;">
-        <span style="color: var(--color-text-muted);">点击按钮测试…</span>
-      </div>
-    </section>
-
-  </main>
+    </div>
+  </div>
 
   <footer class="footer">
     <p>Powered by <a href="https://workers.cloudflare.com/" target="_blank" rel="noopener">Cloudflare Workers</a></p>
   </footer>
 
   <script src="/assets/js/main.js"></script>
+  <script src="/assets/js/packet-sidebar.js"></script>
   <script src="/assets/js/cdn-demo.js"></script>
   <script src="/assets/js/cache-demo.js"></script>
   <script src="/assets/js/dns-demo.js"></script>
   <script src="/assets/js/serverless-demo.js"></script>
-  <script>
-    async function inspectPacket() {
-      const el = document.getElementById("packet-result");
-      el.innerHTML = '<span style="color: var(--color-text-muted);">抓包中…</span>';
-      const { data, error } = await fetchJSON("/api/packet-inspect");
-      if (error) { el.innerHTML = `<span style="color: var(--color-danger);">${escapeHTML(error)}</span>`; return; }
-
-      const ip = data.ip, tcp = data.tcp, tls = data.tls, http = data.http;
-
-      // 构件 HTTP headers 展示
-      let hdrRows = "";
-      for (const [k, v] of Object.entries(http.headers || {})) {
-        hdrRows += `<tr><td style="font-size:0.78rem;">${escapeHTML(k)}</td><td style="font-size:0.78rem;word-break:break-all;">${escapeHTML(v)}</td></tr>`;
-      }
-
-      el.innerHTML = `
-        <div class="pkt-stack">
-          <div class="pkt-layer pkt-ip">
-            <span class="lbl">IP 层</span>
-            <div>
-              <span class="pkt-field"><span class="k">源 IP</span> <span class="v">${escapeHTML(ip.src)}</span></span>
-              <span class="pkt-field"><span class="k">目的 IP</span> <span class="v">${escapeHTML(ip.dst)}</span></span>
-              <span class="pkt-field"><span class="k">协议</span> <span class="v">${escapeHTML(ip.protocol)}</span></span>
-              <span class="pkt-field"><span class="k">版本</span> <span class="v">IPv${ip.version}</span></span>
-              <span class="pkt-field"><span class="k">头部长度</span> <span class="v">${escapeHTML(ip.headerLength)}</span></span>
-              <span class="pkt-field"><span class="k">TTL</span> <span class="v">${escapeHTML(ip.ttl)}</span></span>
-              <div class="pkt-note">${escapeHTML(ip.note)}</div>
-            </div>
-          </div>
-          <div class="pkt-layer pkt-tcp">
-            <span class="lbl">TCP 层</span>
-            <div>
-              <span class="pkt-field"><span class="k">源端口</span> <span class="v">${escapeHTML(tcp.srcPort)}</span></span>
-              <span class="pkt-field"><span class="k">目的端口</span> <span class="v">${tcp.dstPort}</span></span>
-              <span class="pkt-field"><span class="k">Flags</span> <span class="v">${(tcp.flags||[]).join(", ")}</span></span>
-              <span class="pkt-field"><span class="k">头部长度</span> <span class="v">${escapeHTML(tcp.headerLength)}</span></span>
-              <div class="pkt-note">${escapeHTML(tcp.note)}</div>
-            </div>
-          </div>
-          <div class="pkt-layer pkt-tls">
-            <span class="lbl">TLS 层</span>
-            <div>
-              <span class="pkt-field"><span class="k">版本</span> <span class="v">${escapeHTML(tls.version)}</span></span>
-              <span class="pkt-field"><span class="k">加密套件</span> <span class="v">${escapeHTML(tls.cipher)}</span></span>
-              <div class="pkt-note">${escapeHTML(tls.note)}</div>
-            </div>
-          </div>
-          <div class="pkt-layer pkt-http">
-            <span class="lbl">HTTP 层</span>
-            <div>
-              <span class="pkt-field"><span class="k">Method</span> <span class="v">${escapeHTML(http.method)}</span></span>
-              <span class="pkt-field"><span class="k">Path</span> <span class="v">${escapeHTML(http.path)}</span></span>
-              <span class="pkt-field"><span class="k">Version</span> <span class="v">${escapeHTML(http.version)}</span></span>
-              <span class="pkt-field"><span class="k">Host</span> <span class="v">${escapeHTML(http.host)}</span></span>
-              <table class="info-table" style="margin-top:0.5rem;"><tbody>${hdrRows}</tbody></table>
-              <div class="pkt-note">${escapeHTML(http.note)}</div>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-  </script>
 </body>
 </html>
