@@ -1,0 +1,9 @@
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_PASSWORD: tongji
+    volumes:
+      - ./PG_16_202307071:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"

@@ -11,3 +11,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# 数据管线 — 中间产物
+data/geojson/
+data/full.geojson
+data/map.osm
