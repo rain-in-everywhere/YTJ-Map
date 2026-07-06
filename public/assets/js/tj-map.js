@@ -13,6 +13,7 @@ var TJMap = (function () {
       zoom: zoom,
       style: {
         version: 8,
+        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources: {},
         layers: []
       }
@@ -126,6 +127,78 @@ var TJMap = (function () {
           'circle-stroke-width': 1.5
         }
       });
+
+      // ── 文字标注 ──
+      var labelBase = {
+        type: 'symbol', source: 'tongji',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 11,
+          'text-anchor': 'center'
+        },
+        paint: {
+          'text-color': '#333',
+          'text-halo-color': '#fff',
+          'text-halo-width': 1.2
+        }
+      };
+
+      // 建筑名称
+      map.addLayer(Object.assign({}, labelBase, {
+        id: 'buildings-label', 'source-layer': 'buildings',
+        layout: Object.assign({}, labelBase.layout, { 'text-size': 12 }),
+        minzoom: 16
+      }));
+
+      // 道路名称
+      map.addLayer(Object.assign({}, labelBase, {
+        id: 'roads-label', 'source-layer': 'roads',
+        layout: Object.assign({}, labelBase.layout, {
+          'text-field': ['get', 'name'],
+          'symbol-placement': 'line',
+          'text-size': 10
+        }),
+        paint: Object.assign({}, labelBase.paint, { 'text-color': '#666' }),
+        minzoom: 15
+      }));
+
+      // POI 名称
+      map.addLayer(Object.assign({}, labelBase, {
+        id: 'pois-label', 'source-layer': 'pois',
+        layout: Object.assign({}, labelBase.layout, {
+          'text-offset': [0, 1.4],
+          'text-size': 10
+        }),
+        minzoom: 14
+      }));
+
+      // 水体名称
+      map.addLayer(Object.assign({}, labelBase, {
+        id: 'water-label', 'source-layer': 'water',
+        layout: Object.assign({}, labelBase.layout, { 'text-size': 11 }),
+        paint: Object.assign({}, labelBase.paint, { 'text-color': '#1565c0' }),
+        minzoom: 13
+      }));
+
+      // 绿地/区域名称
+      map.addLayer(Object.assign({}, labelBase, {
+        id: 'landuse-label', 'source-layer': 'landuse',
+        layout: Object.assign({}, labelBase.layout, { 'text-size': 11 }),
+        paint: Object.assign({}, labelBase.paint, { 'text-color': '#2e7d32' }),
+        minzoom: 14
+      }));
+
+      // 地铁/公交线路名称
+      map.addLayer(Object.assign({}, labelBase, {
+        id: 'misc-line-label', 'source-layer': 'misc-line',
+        layout: Object.assign({}, labelBase.layout, {
+          'symbol-placement': 'line',
+          'text-size': 9
+        }),
+        paint: Object.assign({}, labelBase.paint, { 'text-color': '#546e7a' }),
+        minzoom: 13
+      }));
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
