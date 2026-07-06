@@ -7,17 +7,18 @@ var TJMap = (function () {
     var center = opts.center || [121.5012, 31.2825];
     var zoom = opts.zoom || 15.5;
 
-    var map = new maplibregl.Map({
+    var mapOpts = {
       container: container,
       center: center,
       zoom: zoom,
-      maxBounds: [[121.480, 31.270], [121.520, 31.295]],
       style: {
         version: 8,
         sources: {},
         layers: []
       }
-    });
+    };
+    if (opts.maxBounds) mapOpts.maxBounds = opts.maxBounds;
+    var map = new maplibregl.Map(mapOpts);
 
     map.on('load', function () {
       try {

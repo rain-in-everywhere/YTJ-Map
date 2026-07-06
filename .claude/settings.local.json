@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(///wsl.localhost/Ubuntu-24.04/home/zz/projects/**)",
+      "Bash(rm -rf public/* migrations report.pdf README.md CLAUDE.md)"
+    ]
+  }
+}
