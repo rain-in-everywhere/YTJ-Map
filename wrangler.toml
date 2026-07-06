@@ -1,21 +1,15 @@
-# Cloudflare Workers 配置
-# 项目：计算机网络课程大作业
-
-name = "computer-networking-demo"
+name = "ytj-map"
 main = "src/index.js"
 compatibility_date = "2026-06-28"
-compatibility_flags = ["nodejs_compat"]
 
-# Workers Assets：静态资源从 public/ 自动服务
 [assets]
 directory = "./public"
 binding = "ASSETS"
 
-# 自定义域名路由
 [[routes]]
 pattern = "lyra4.icu/*"
 zone_name = "lyra4.icu"
 
-# 环境变量
-[vars]
-SITE_NAME = "lyra4"
+[[r2_buckets]]
+binding = "TILES"
+bucket_name = "ytj-map"

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>审核管理 - 同济地图</title>
+  <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { height: 100vh; display: flex; font-family: system-ui, sans-serif; }
+    #map { flex: 1; height: 100%; }
+
+    #panel {
+      width: 380px; height: 100%; display: flex; flex-direction: column;
+      background: #fafafa; border-left: 1px solid #ddd;
+    }
+    #panel-header {
+      padding: 14px 16px; background: #263238; color: #fff;
+    }
+    #panel-header h2 { font-size: 16px; }
+    #panel-header .hint { font-size: 12px; opacity: 0.7; margin-top: 4px; }
+
+    #sub-list { max-height: 35%; overflow-y: auto; }
+    #detail { flex: 1; overflow-y: auto; border-top: 1px solid #eee; background: #fff; display: none; }
+    #detail.active { display: flex; flex-direction: column; }
+    #detail-header { padding: 10px 16px; border-bottom: 1px solid #f0f0f0; font-size: 13px; color: #333; }
+    #detail-features { padding: 8px 16px; flex: 1; overflow-y: auto; }
+    .feat-item { margin-bottom: 8px; padding: 8px; background: #fafafa; border-radius: 4px; border: 1px solid #eee; font-size: 12px; }
+    .feat-item .fid { font-weight: 600; color: #1565c0; }
+    .feat-item .geom-type { color: #999; font-size: 11px; margin-left: 8px; }
+    .feat-item .tags { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
+    .feat-item .tag { background: #e3f2fd; padding: 1px 6px; border-radius: 3px; font-size: 11px; color: #0d47a1; }
+    .tag-same { background: #e8e8e8; color: #666; }
+    .tag-changed { background: #fff9c4; color: #f57f17; }
+    .tag-added { background: #c8e6c9; color: #2e7d32; }
+    .tag-removed { background: #ffcdd2; color: #c62828; }
+    .feat-item .section-label { font-size: 10px; color: #999; margin: 3px 0 2px; }
+    .sub-card {
+      margin: 8px 12px; padding: 12px; background: #fff; border-radius: 6px;
+      border: 1px solid #e0e0e0; cursor: pointer; transition: border-color 0.2s;
+    }
+    .sub-card:hover { border-color: #1565c0; }
+    .sub-card.active { border-color: #ff8f00; background: #fff8e1; }
+
+    .sub-card .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .sub-card .user { font-weight: 600; font-size: 14px; color: #333; }
+    .sub-card .time { font-size: 11px; color: #999; }
+    .sub-card .meta { font-size: 12px; color: #666; }
+    .sub-card .note { font-size: 12px; color: #999; margin-top: 4px; font-style: italic; }
+    .sub-card .status { font-size: 11px; padding: 2px 8px; border-radius: 3px; }
+    .status-pending { background: #fff3e0; color: #e65100; }
+    .status-applied { background: #e8f5e9; color: #2e7d32; }
+    .status-rejected { background: #fce4ec; color: #c62828; }
+
+    .toolbar { padding: 12px 16px; border-top: 1px solid #eee; background: #fff; }
+    .toolbar .actions { display: flex; gap: 8px; }
+    .btn {
+      flex: 1; padding: 8px 0; border: none; border-radius: 4px; cursor: pointer;
+      font-size: 13px; text-align: center;
+    }
+    .btn-apply { background: #2e7d32; color: #fff; }
+    .btn-reject { background: #c62828; color: #fff; }
+    .btn-preview { background: #1565c0; color: #fff; }
+    .btn-disabled { background: #e0e0e0; color: #999; cursor: not-allowed; }
+
+    #empty { text-align: center; color: #bbb; padding: 40px 20px; font-size: 13px; }
+
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #333; color: #fff; padding: 10px 24px; border-radius: 6px;
+      font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 1000;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="panel">
+    <div id="panel-header">
+      <h2>审核管理</h2>
+      <div class="hint" id="hint">加载中...</div>
+    </div>
+    <div id="sub-list"></div>
+    <div id="detail">
+      <div id="detail-header"></div>
+      <div id="detail-features"></div>
+    </div>
+    <div class="toolbar">
+      <div class="actions">
+        <button class="btn btn-preview" onclick="Admin.preview()">地图预览</button>
+        <button class="btn btn-apply" onclick="Admin.apply()">✓ 应用</button>
+        <button class="btn btn-reject" onclick="Admin.reject()">✗ 拒绝</button>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+
+  <script>
+    var Admin = (function () {
+      var map, submissions = [], selectedIdx = -1, selectedDetail = null, masterMap = {};
+
+      function init() {
+        var protocol = new pmtiles.Protocol();
+        maplibregl.addProtocol('pmtiles', protocol.tile);
+
+        map = new maplibregl.Map({
+          container: 'map',
+          center: [121.5012, 31.2825],
+          zoom: 15.5,
+          maxBounds: [[121.480, 31.270], [121.520, 31.295]],
+          style: { version: 8, sources: {}, layers: [] }
+        });
+
+        map.on('load', function () {
+          map.addSource('tongji', { type: 'vector', url: 'pmtiles://' + location.origin + '/tiles/tongji.pmtiles' });
+          map.addSource('preview', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+
+          // 灰色参考底图
+          map.addLayer({ id: 'bg-misc-fill', type: 'fill', source: 'tongji', 'source-layer': 'misc',
+            paint: { 'fill-color': '#d0d0d0', 'fill-opacity': 0.2 } });
+          map.addLayer({ id: 'bg-misc-line', type: 'line', source: 'tongji', 'source-layer': 'misc-line',
+            paint: { 'line-color': '#ccc', 'line-width': 1 } });
+          map.addLayer({ id: 'bg-misc-point', type: 'circle', source: 'tongji', 'source-layer': 'misc-point',
+            paint: { 'circle-radius': 2, 'circle-color': '#bbb' } });
+          map.addLayer({ id: 'bg-buildings', type: 'fill-extrusion', source: 'tongji', 'source-layer': 'buildings',
+            paint: { 'fill-extrusion-color': '#e0e0e0', 'fill-extrusion-height': ['*', ['case', ['has', 'building:levels'], ['to-number', ['get', 'building:levels']], 2], 3.5], 'fill-extrusion-opacity': 0.5 } });
+          map.addLayer({ id: 'bg-roads', type: 'line', source: 'tongji', 'source-layer': 'roads',
+            paint: { 'line-color': '#ccc', 'line-width': 1.5 } });
+          map.addLayer({ id: 'bg-landuse', type: 'fill', source: 'tongji', 'source-layer': 'landuse',
+            paint: { 'fill-color': '#e8f5e9', 'fill-opacity': 0.3 } });
+          map.addLayer({ id: 'bg-water-fill', type: 'fill', source: 'tongji', 'source-layer': 'water',
+            paint: { 'fill-color': '#b0bec5', 'fill-opacity': 0.3 } });
+          map.addLayer({ id: 'bg-water-line', type: 'line', source: 'tongji', 'source-layer': 'waterway',
+            paint: { 'line-color': '#b0bec5', 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 0.8, 18, 3] } });
+
+          // 预览高亮层
+          map.addLayer({ id: 'preview-buildings', type: 'fill-extrusion', source: 'preview',
+            filter: ['==', ['get', '_layer'], 'buildings'],
+            paint: { 'fill-extrusion-color': '#ff8f00', 'fill-extrusion-height': ['*', ['case', ['has', 'building:levels'], ['to-number', ['get', 'building:levels']], 2], 3.5], 'fill-extrusion-opacity': 0.7 } });
+          map.addLayer({ id: 'preview-others', type: 'line', source: 'preview',
+            filter: ['!=', ['get', '_layer'], 'buildings'],
+            paint: { 'line-color': '#ff8f00', 'line-width': 4 } });
+
+          loadSubmissions();
+        });
+      }
+
+      function loadSubmissions() {
+        fetch('/api/submissions')
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            submissions = data;
+            renderList();
+            document.getElementById('hint').textContent = submissions.length + ' 条待审核';
+          })
+          .catch(function () {
+            document.getElementById('hint').textContent = '加载失败';
+          });
+      }
+
+      function renderList() {
+        var list = document.getElementById('sub-list');
+        if (submissions.length === 0) {
+          list.innerHTML = '<div id="empty">暂无待审核的提交 ✨</div>';
+          return;
+        }
+        list.innerHTML = '';
+        submissions.forEach(function (s, i) {
+          var card = document.createElement('div');
+          card.className = 'sub-card' + (i === selectedIdx ? ' active' : '');
+          card.innerHTML =
+            '<div class="top"><span class="user">' + esc(s.user) + '</span><span class="status status-' + (s.status || 'pending') + '">' + (s.status || 'pending') + '</span></div>' +
+            '<div class="meta">' + s.count + ' 个要素</div>' +
+            '<div class="time">' + (s.submittedAt ? new Date(s.submittedAt).toLocaleString('zh-CN') : '') + '</div>' +
+            (s.note ? '<div class="note">' + esc(s.note) + '</div>' : '');
+          card.onclick = function () { selectSubmission(i); };
+          list.appendChild(card);
+        });
+      }
+
+      function selectSubmission(idx) {
+        selectedIdx = idx;
+        selectedDetail = null;
+        masterMap = {};
+        renderList();
+        document.getElementById('detail').className = '';
+        var s = submissions[idx];
+        if (!s) return;
+
+        Promise.all([
+          fetch('/api/submissions/' + s.id).then(function (r) { return r.json(); }),
+          fetch('/api/custom-data').then(function (r) { return r.json(); })
+        ]).then(function (results) {
+          selectedDetail = results[0];
+          var masterData = results[1];
+          (masterData.features || []).forEach(function (f) {
+            if (f.properties && f.properties.id) masterMap[f.properties.id] = f;
+          });
+          renderDetail();
+          renderPreview();
+        }).catch(function (e) {
+          toast('加载详情失败: ' + e.message);
+        });
+      }
+
+      function renderDetail() {
+        var d = selectedDetail;
+        var panel = document.getElementById('detail');
+        var header = document.getElementById('detail-header');
+        var featDiv = document.getElementById('detail-features');
+        if (!d || !d.features) {
+          panel.className = '';
+          return;
+        }
+        panel.className = 'active';
+        header.innerHTML = '<strong>' + esc(d.user || 'anonymous') + '</strong> — ' + d.count + ' 个要素 — ' + (d.submittedAt ? new Date(d.submittedAt).toLocaleString('zh-CN') : '');
+
+        var SKIP = { _layer: 1, _osm_id: 1, _geom_type: 1 };
+        var html = '';
+        d.features.forEach(function (f) {
+          var props = f.properties || {};
+          var newTags = {};
+          Object.keys(props).forEach(function (k) { if (!SKIP[k]) newTags[k] = props[k]; });
+
+          // 查找原始要素
+          var key = props._osm_id || f.id;
+          var orig = masterMap[key];
+          var oldTags = {};
+          if (orig && orig.properties) {
+            Object.keys(orig.properties).forEach(function (k) { if (!SKIP[k]) oldTags[k] = orig.properties[k]; });
+          }
+
+          var isNew = !orig;
+
+          // 分类 tags
+          var unchanged = [], changed = [], added = [], removed = [];
+          var seen = {};
+          Object.keys(newTags).forEach(function (k) {
+            seen[k] = true;
+            if (oldTags.hasOwnProperty(k)) {
+              if (String(oldTags[k]) === String(newTags[k])) unchanged.push(k);
+              else changed.push(k);
+            } else {
+              added.push(k);
+            }
+          });
+          Object.keys(oldTags).forEach(function (k) {
+            if (!seen[k]) removed.push(k);
+          });
+
+          var tagsHtml = '';
+          if (unchanged.length + changed.length + added.length + removed.length === 0) {
+            tagsHtml = '<span style="color:#999">(无 tags)</span>';
+          } else {
+            if (changed.length) {
+              tagsHtml += '<div class="section-label">已修改</div>';
+              changed.forEach(function (k) {
+                tagsHtml += '<span class="tag tag-changed">' + esc(k) + ': ' + esc(String(oldTags[k])) + ' → ' + esc(String(newTags[k])) + '</span>';
+              });
+            }
+            if (added.length) {
+              tagsHtml += '<div class="section-label">新增</div>';
+              added.forEach(function (k) {
+                tagsHtml += '<span class="tag tag-added">+' + esc(k) + '=' + esc(String(newTags[k])) + '</span>';
+              });
+            }
+            if (removed.length) {
+              tagsHtml += '<div class="section-label">已删除</div>';
+              removed.forEach(function (k) {
+                tagsHtml += '<span class="tag tag-removed">-' + esc(k) + '=' + esc(String(oldTags[k])) + '</span>';
+              });
+            }
+            if (unchanged.length) {
+              tagsHtml += '<div class="section-label">未变</div>';
+              unchanged.forEach(function (k) {
+                tagsHtml += '<span class="tag tag-same">' + esc(k) + '=' + esc(String(newTags[k])) + '</span>';
+              });
+            }
+          }
+
+          html += '<div class="feat-item">' +
+            '<span class="fid">' + esc(props._layer || '?') + ' / ' + esc(String(f.id || props._osm_id || '?')) + '</span>' +
+            '<span class="geom-type">' + (f.geometry ? f.geometry.type : '?') + (isNew ? ' (新建要素)' : '') + '</span>' +
+            '<div class="tags">' + tagsHtml + '</div>' +
+            '</div>';
+        });
+        featDiv.innerHTML = html;
+      }
+
+      function renderPreview() {
+        if (!selectedDetail || !selectedDetail.features) return;
+        var features = selectedDetail.features;
+        map.getSource('preview').setData({ type: 'FeatureCollection', features: features });
+
+        var bounds = new maplibregl.LngLatBounds();
+        features.forEach(function (f) {
+          if (!f.geometry) return;
+          flattenCoords(f.geometry.coordinates).forEach(function (c) {
+            bounds.extend(c);
+          });
+        });
+        if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 60, maxZoom: 18 });
+      }
+
+      function flattenCoords(coords) {
+        if (!coords || !coords.length) return [];
+        if (typeof coords[0] === 'number') return [coords];
+        return coords.reduce(function (acc, c) { return acc.concat(flattenCoords(c)); }, []);
+      }
+
+      function preview() {
+        if (!selectedDetail) return toast('请先选择一条提交');
+        renderPreview();
+        toast('已定位到要素区域');
+      }
+
+      function apply() {
+        if (selectedIdx < 0) return toast('请先选择一条提交');
+        if (!confirm('确认应用此提交？将覆盖主库对应要素。')) return;
+        var s = submissions[selectedIdx];
+        fetch('/api/submissions/' + s.id, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'apply' })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.ok) { toast('已应用！主库现有 ' + data.totalFeatures + ' 个要素'); }
+          else { toast('失败: ' + (data.error || '')); }
+          loadSubmissions();
+          selectedIdx = -1;
+          selectedDetail = null;
+          document.getElementById('detail').className = '';
+        })
+        .catch(function (e) { toast('错误: ' + e.message); });
+      }
+
+      function reject() {
+        if (selectedIdx < 0) return toast('请先选择一条提交');
+        if (!confirm('确认拒绝此提交？')) return;
+        var s = submissions[selectedIdx];
+        fetch('/api/submissions/' + s.id, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reject' })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.ok) toast('已拒绝');
+          else toast('失败: ' + (data.error || ''));
+          loadSubmissions();
+          selectedIdx = -1;
+          selectedDetail = null;
+          document.getElementById('detail').className = '';
+        })
+        .catch(function (e) { toast('错误: ' + e.message); });
+      }
+
+      function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+      function toast(m) { var e = document.getElementById('toast'); e.textContent = m; e.className = 'show'; setTimeout(function () { e.className = ''; }, 2000); }
+
+      return { init: init, preview: preview, apply: apply, reject: reject, selectSubmission: selectSubmission };
+    })();
+
+    window.addEventListener('DOMContentLoaded', Admin.init);
+  </script>
+</body>
+</html>

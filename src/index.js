@@ -1,221 +1,186 @@
-/**
- * Cloudflare Worker — 计网课程 Serverless 网站
- *
- * 路由：
- *   /api/hello       — 简单 API，演示 Serverless 请求/响应
- *   /api/dns-lookup  — DNS-over-HTTPS 查询
- *   /api/cache-demo  — HTTP 缓存策略演示
- *   /api/geo         — 请求边缘节点/网络信息（CDN 演示）
- *   其他路径           — Workers Assets（public/ 静态文件）
- */
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // ── API 路由 ──
-    if (path === "/api/hello")   return handleHello(request);
-    if (path === "/api/dns-lookup") return handleDnsLookup(url);
-    if (path === "/api/cache-demo")  return handleCacheDemo(request, url);
-    if (path === "/api/geo")     return handleGeo(request);
-    if (path === "/api/packet-inspect") return handlePacketInspect(request);
-
-    // ── 静态文件 → Workers Assets ──
-    try {
-      return await env.ASSETS.fetch(request);
-    } catch {
-      return new Response("404 Not Found", { status: 404 });
+    // ── R2 代理：/tiles/* → R2 ──
+    if (path.startsWith('/tiles/')) {
+      return serveR2(env, path.replace('/tiles/', ''), request);
     }
-  },
+
+    // ── 自定义数据 API ──
+    if (path === '/api/custom-data') {
+      return serveR2(env, 'data/custom.geojson', request);
+    }
+
+    // ── 提交编辑 ──
+    if (path === '/api/submit' && request.method === 'POST') {
+      return handleSubmit(request, env);
+    }
+
+    // ── 列出 submissions（管理员） ──
+    if (path === '/api/submissions') {
+      return handleListSubmissions(env);
+    }
+
+    // ── 获取单个 submission 详情（管理员） ──
+    if (path.startsWith('/api/submissions/') && request.method === 'GET') {
+      return handleGetSubmission(path, env);
+    }
+
+    // ── 应用 / 拒绝 submission ──
+    if (path.startsWith('/api/submissions/') && request.method === 'POST') {
+      return handleReview(path, request, env);
+    }
+
+    // ── 静态资源 ──
+    return env.ASSETS.fetch(request);
+  }
 };
 
-// ═══════════════════════════════════════════════
-// API Handler: /api/hello
-// ═══════════════════════════════════════════════
-function handleHello(request) {
-  return json({
-    message: "Hello from Cloudflare Worker!",
-    method: request.method,
-    runtime: "Cloudflare Workers (V8 Isolate)",
-  });
-}
+// ── R2 文件服务（含 Range 支持） ──
+async function serveR2(env, key, request) {
+  const obj = await env.TILES.get(key);
+  if (!obj) return json({ error: 'Not found' }, 404);
 
-// ═══════════════════════════════════════════════
-// API Handler: /api/dns-lookup?domain=...&type=...
-// ═══════════════════════════════════════════════
-async function handleDnsLookup(url) {
-  const domain = url.searchParams.get("domain") || "example.com";
-  const recordType = url.searchParams.get("type") || "A";
-  const validTypes = ["A", "AAAA", "CNAME", "MX", "TXT", "NS"];
-  const type = validTypes.includes(recordType.toUpperCase()) ? recordType.toUpperCase() : "A";
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  headers.set('etag', obj.httpEtag);
+  headers.set('Cache-Control', 'public, max-age=86400');
+  headers.set('Access-Control-Allow-Origin', '*');
 
-  try {
-    const dohRes = await fetch(
-      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${type}`,
-      { headers: { Accept: "application/dns-json" } }
-    );
-    if (!dohRes.ok) return json({ error: "DNS 查询失败", domain, recordType: type, dohStatus: dohRes.status }, 502);
-
-    const dnsData = await dohRes.json();
-    return json({
-      domain, recordType: type,
-      results: dnsData.Answer || [],
-      status: dnsData.Status === 0 ? "NOERROR" : `错误码 ${dnsData.Status}`,
-      resolver: "Cloudflare 1.1.1.1 (DoH)",
-      dnsProtocol: "DNS over HTTPS — 加密查询",
-    });
-  } catch (err) {
-    return json({ error: "DNS 查询异常", message: err.message }, 500);
-  }
-}
-
-// ═══════════════════════════════════════════════
-// API Handler: /api/cache-demo?strategy=...&count=N
-// ═══════════════════════════════════════════════
-function handleCacheDemo(request, url) {
-  const strategy = url.searchParams.get("strategy") || "no-cache";
-  const requestCount = parseInt(url.searchParams.get("count") || "0");
-
-  const strategies = {
-    "no-store":   { h: { "Cache-Control": "no-store" }, d: "浏览器绝不缓存，每次请求服务器。适合敏感数据。" },
-    "no-cache":   { h: { "Cache-Control": "no-cache" }, d: "浏览器缓存但每次使用前需向服务器验证。" },
-    "max-age-10": { h: { "Cache-Control": "public, max-age=10" }, d: "浏览器缓存 10 秒，期间不发请求。" },
-    "max-age-60": { h: { "Cache-Control": "public, max-age=60" }, d: "浏览器缓存 60 秒。适合不常变化的内容。" },
-    "etag":       { h: { "Cache-Control": "public, max-age=5", ETag: `"demo-etag-${requestCount % 3}"` }, d: "ETag 标识资源版本，304 响应表示未变化。" },
-    "immutable":  { h: { "Cache-Control": "public, max-age=31536000, immutable" }, d: "永久缓存，适合带 hash 的静态资源。" },
-  };
-
-  const cfg = strategies[strategy] || strategies["no-cache"];
-  const data = {
-    strategy, appliedHeaders: cfg.h, description: cfg.d,
-  };
-
-  const headers = new Headers({
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "X-Strategy": strategy,
-  });
-  Object.entries(cfg.h).forEach(([k, v]) => headers.set(k, v));
-
-  // ETag 304 条件响应
-  if (strategy === "etag") {
-    const ifNoneMatch = request.headers.get("If-None-Match");
-    if (ifNoneMatch === cfg.h.ETag) {
-      data.cacheHit = true;
-      data.message = "304 Not Modified — 资源未变，使用缓存。";
-      return new Response(null, { status: 304, headers });
+  const rangeHeader = request.headers.get('Range');
+  if (rangeHeader) {
+    const m = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (m) {
+      const start = parseInt(m[1]);
+      const end = m[2] ? parseInt(m[2]) : obj.size - 1;
+      const sliced = await env.TILES.get(key, { range: { offset: start, length: end - start + 1 } });
+      if (!sliced) return json({ error: 'Range not satisfiable' }, 416);
+      sliced.writeHttpMetadata(headers);
+      headers.set('Content-Range', `bytes ${start}-${end}/${obj.size}`);
+      return new Response(sliced.body, { status: 206, headers });
     }
   }
 
-  return new Response(JSON.stringify(data, null, 2), { headers });
+  headers.set('Accept-Ranges', 'bytes');
+  return new Response(obj.body, { headers });
 }
 
-// ═══════════════════════════════════════════════
-// API Handler: /api/geo
-// ═══════════════════════════════════════════════
-function handleGeo(request) {
-  const cf = request.cf || {};
-  return json({
-    colo: cf.colo || "未知（本地开发不注入 cf 数据）",
-    coloNote: "IATA 代码：LAX=洛杉矶, NRT=东京, FRA=法兰克福, HKG=香港, SIN=新加坡",
-    asn: cf.asn || "未知",
-    asnNote: cf.asn ? `AS${cf.asn} — 你的 ISP/网络` : "",
-    httpProtocol: cf.httpProtocol || "未知",
-    protocolNote: "HTTP/1.1（文本）, HTTP/2（多路复用）, HTTP/3（QUIC/UDP）",
-    tlsVersion: cf.tlsVersion || "未知",
-    tlsCipher: cf.tlsCipher || "未知",
-    _devNote: cf.colo ? null : "⚠ 本地 dev 不注入 cf 数据，部署后可看真实信息。",
-  });
-}
-
-// ═══════════════════════════════════════════════
-// API Handler: /api/packet-inspect — 自暴露数据包解析
-// ═══════════════════════════════════════════════
-function handlePacketInspect(request) {
-  const cf = request.cf || {};
-  const url = new URL(request.url);
-
-  // 收集所有 HTTP 请求头
-  const httpHeaders = {};
-  for (const [k, v] of request.headers.entries()) {
-    httpHeaders[k] = v;
+// ── POST /api/submit ──
+async function handleSubmit(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  if (!body.features || !Array.isArray(body.features)) {
+    return json({ error: 'Missing features array' }, 400);
   }
 
-  return json({
-    // ── 路由追踪：分组如何到达 Worker ──
-    route: {
-      client: {
-        ip: request.headers.get("CF-Connecting-IP") || "N/A",
-        asn: cf.asn ? `AS${cf.asn}` : "N/A",
-        city: cf.city || "N/A",
-        country: cf.country || "N/A",
-        note: "你的设备 → ISP 网络 → Internet",
-      },
-      dns: {
-        domain: url.hostname,
-        resolved: cf.colo ? `${cf.colo}（Cloudflare 边缘 Anycast）` : "DNS 解析 → CNAME → Cloudflare 边缘 IP",
-        note: "DNS 将域名解析为 IP，Anycast 使同一 IP 在 330+ 节点同时宣告，BGP 自动选最近路径。",
-      },
-      edge: {
-        colo: cf.colo || "N/A",
-        coloName: coloName(cf.colo),
-        tlsTermination: "边缘节点完成 SSL 解密",
-        workerRuntime: "V8 Isolate 执行 Worker 代码",
-        note: `请求到达 Cloudflare ${cf.colo || "?"} 边缘节点 → SSL 解密 → Worker 处理 → 生成响应。`,
-      },
-      returnPath: {
-        direction: "响应沿原路径返回",
-        note: "边缘节点将 Worker 响应通过已建立的 TCP 连接返回给你的浏览器。",
-      },
-    },
-    // ── IP 层 ──
-    ip: {
-      src: request.headers.get("CF-Connecting-IP") || "N/A",
-      dst: url.hostname,
-      protocol: "TCP (6)",
-      version: 4,
-      headerLength: "20 bytes",
-      ttl: "—（边缘节点已终结）",
-      note: "源 IP 来自 CF-Connecting-IP；真实 TTL/DF 等 IP 头字段在边缘被剥离。",
-    },
-// ── TLS 层 ──
-    tls: {
-      version: cf.tlsVersion || "TLSv1.3",
-      cipher: cf.tlsCipher || "—",
-      note: "客户端 ↔ Cloudflare 边缘 TLS 加密；CF 用 request.cf 透传参数。",
-    },
-    // ── HTTP 层 ──
-    http: {
-      method: request.method,
-      path: url.pathname + url.search,
-      version: cf.httpProtocol || "HTTP/1.1",
-      host: url.host,
-      headers: httpHeaders,
-      note: "经过 IP→TCP→TLS 解封装后，Worker 收到的完整 HTTP 请求。",
-    },
-    serverTime: new Date().toISOString(),
-  });
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const id = ts;
+  const submission = {
+    id,
+    submittedAt: new Date().toISOString(),
+    user: body.user || 'anonymous',
+    count: body.features.length,
+    features: body.features,
+    status: 'pending'
+  };
+
+  await env.TILES.put(`submissions/${id}.json`, JSON.stringify(submission));
+
+  // 更新 submissions 索引
+  await updateSubmissionIndex(env, id, submission);
+
+  return json({ ok: true, id, count: submission.count });
 }
 
-// colo 代码 → 城市名
-function coloName(code) {
-  const m = { LAX:"洛杉矶", NRT:"东京", FRA:"法兰克福", HKG:"香港", SIN:"新加坡", LHR:"伦敦", AMS:"阿姆斯特丹", SYD:"悉尼", GRU:"圣保罗", MXP:"米兰", CDG:"巴黎", DME:"莫斯科", BOM:"孟买", ICN:"首尔", KIX:"大阪" };
-  return m[code] || code || "?";
+// ── GET /api/submissions ──
+async function handleListSubmissions(env) {
+  const index = await getSubmissionIndex(env);
+  const list = Object.values(index)
+    .filter(s => s.status === 'pending')
+    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  return json(list);
 }
 
-// ═══════════════════════════════════════════════
-// 工具函数
-// ═══════════════════════════════════════════════
+// ── GET /api/submissions/:id  ──
+async function handleGetSubmission(path, env) {
+  const id = path.replace('/api/submissions/', '').replace(/\/$/, '');
+  const obj = await env.TILES.get(`submissions/${id}.json`);
+  if (!obj) return json({ error: 'Submission not found' }, 404);
+  const sub = JSON.parse(await obj.text());
+  return json(sub);
+}
+
+// ── POST /api/submissions/:id  (action=apply|reject) ──
+async function handleReview(path, request, env) {
+  const id = path.replace('/api/submissions/', '').replace(/\/$/, '');
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const action = body.action;
+
+  if (action === 'apply') {
+    // 读取 submission
+    const subObj = await env.TILES.get(`submissions/${id}.json`);
+    if (!subObj) return json({ error: 'Submission not found' }, 404);
+    const sub = JSON.parse(await subObj.text());
+
+    // 读取当前 master 数据
+    let master = { type: 'FeatureCollection', features: [] };
+    const masterObj = await env.TILES.get('data/custom.geojson');
+    if (masterObj) {
+      master = JSON.parse(await masterObj.text());
+    }
+
+    // 合并：submission 的 features 覆盖/新增到 master
+    const masterMap = {};
+    master.features.forEach(f => { masterMap[String(f.id)] = f; });
+    sub.features.forEach(f => { masterMap[String(f.id)] = f; });
+    master.features = Object.values(masterMap);
+
+    // 写回 R2
+    await env.TILES.put('data/custom.geojson', JSON.stringify(master));
+
+    // 更新状态
+    sub.status = 'applied';
+    await env.TILES.put(`submissions/${id}.json`, JSON.stringify(sub));
+    await updateSubmissionIndex(env, id, sub);
+
+    return json({ ok: true, action: 'applied', totalFeatures: master.features.length });
+  }
+
+  if (action === 'reject') {
+    const subObj = await env.TILES.get(`submissions/${id}.json`);
+    if (!subObj) return json({ error: 'Submission not found' }, 404);
+    const sub = JSON.parse(await subObj.text());
+    sub.status = 'rejected';
+    await env.TILES.put(`submissions/${id}.json`, JSON.stringify(sub));
+    await updateSubmissionIndex(env, id, sub);
+    return json({ ok: true, action: 'rejected' });
+  }
+
+  return json({ error: 'Invalid action. Use "apply" or "reject".' }, 400);
+}
+
+// ── submission 索引辅助 ──
+async function getSubmissionIndex(env) {
+  const obj = await env.TILES.get('submissions/index.json');
+  if (!obj) return {};
+  try { return JSON.parse(await obj.text()); } catch { return {}; }
+}
+
+async function updateSubmissionIndex(env, id, sub) {
+  const index = await getSubmissionIndex(env);
+  index[id] = {
+    id, submittedAt: sub.submittedAt, user: sub.user,
+    count: sub.count, status: sub.status
+  };
+  await env.TILES.put('submissions/index.json', JSON.stringify(index));
+}
+
 function json(data, status = 200) {
-  return new Response(JSON.stringify(data, null, 2), {
+  return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, If-None-Match",
-      "X-Powered-By": "Cloudflare Workers",
-    },
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
   });
 }

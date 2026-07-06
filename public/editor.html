@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据编辑器 - 同济地图</title>
+  <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/pmtiles@3/dist/pmtiles.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{height:100vh;display:flex;font-family:system-ui,sans-serif}
+    #map{flex:1;height:100%}
+    #panel{width:400px;height:100%;display:flex;flex-direction:column;background:#fafafa;border-left:1px solid #ddd}
+    #panel-header{padding:14px 16px 10px;background:#fff;border-bottom:1px solid #eee}
+    #panel-header h2{font-size:15px;color:#333}
+    #panel-header .hint{font-size:12px;color:#999;margin-top:4px}
+    #no-sel{flex:1;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:13px;text-align:center;padding:20px}
+    #tags-wrap{display:none;flex:1;overflow-y:auto;padding:12px 16px}
+    .meta{font-size:12px;color:#999;margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap}
+    .meta span{background:#eee;padding:2px 8px;border-radius:3px}
+    .tag-row{display:flex;gap:4px;margin-bottom:6px}
+    .tag-row input{padding:5px 6px;border:1px solid #ddd;border-radius:3px;font-size:12px;min-width:0}
+    .tag-row .k{width:110px;flex-shrink:0}
+    .tag-row .v{flex:1;min-width:0}
+    .tag-row .del{width:44px;flex-shrink:0;height:28px;border:1px solid #ef9a9a;background:#fff;color:#c62828;cursor:pointer;font-size:11px;border-radius:3px}
+    .tag-row .del:hover{background:#ffebee}
+    .tag-row.readonly input{background:#f3f3f3;color:#999}
+    .add-section{margin-top:10px;padding-top:10px;border-top:1px dashed #ddd}
+    .add-section .title{font-size:11px;color:#999;margin-bottom:6px}
+    .add-section .fields{display:flex;gap:6px}
+    .add-section input{flex:1;padding:5px 8px;border:1px solid #ccc;border-radius:3px;font-size:12px}
+    .btn-row{padding:10px 16px;display:flex;gap:8px;border-top:1px solid #eee;background:#fff}
+    .btn{flex:1;padding:8px 0;border:none;border-radius:4px;cursor:pointer;font-size:13px;text-align:center}
+    .btn-submit{background:#ff8f00;color:#fff}
+    .btn-submit:disabled{background:#ccc}
+    #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 24px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:1000}
+    #toast.show{opacity:1}
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <div id="panel-header">
+    <h2>Tags 编辑器</h2>
+    <div class="hint">点击要素 → 编辑 → 提交推送</div>
+  </div>
+  <div id="no-sel">← 点击地图上的要素</div>
+  <div id="tags-wrap">
+    <div class="meta">
+      <span id="mlayer"></span><span id="mid"></span><span id="mgeom"></span>
+    </div>
+    <div id="tag-list"></div>
+    <div class="add-section">
+      <div class="title">新建字段</div>
+      <div class="fields">
+        <input id="nk" placeholder="key">
+        <input id="nv" placeholder="value">
+        <button class="btn btn-submit" style="flex:0 0 60px;font-size:12px;padding:5px 0" onclick="E.add()">新建</button>
+      </div>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-submit" onclick="E.submit()">提交推送</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+var E = (function(){
+  var map;
+  var curTags={}, curLayer='', curFeatId=null, curGeom=null;
+  var RO = { id:1 };
+
+  function init(){
+    var p = new pmtiles.Protocol();
+    maplibregl.addProtocol('pmtiles', p.tile);
+
+    map = new maplibregl.Map({
+      container:'map', center:[121.5012,31.2825], zoom:15.5,
+      maxBounds:[[121.48,31.27],[121.52,31.295]],
+      style:{version:8,sources:{},layers:[]}
+    });
+
+    map.on('load',function(){
+      map.addSource('tongji',{type:'vector',url:'pmtiles://'+location.origin+'/tiles/tongji.pmtiles'});
+
+      // 基础图层（底→顶）
+      map.addLayer({id:'misc',type:'fill',source:'tongji','source-layer':'misc',paint:{'fill-color':'#e8e0d8','fill-opacity':0.25}});
+      map.addLayer({id:'misc-line',type:'line',source:'tongji','source-layer':'misc-line',paint:{'line-color':['match',['get','route'],'subway','#009FDF','bus','#C1A7E2','#b0bec5'],'line-width':['interpolate',['linear'],['zoom'],14,1.5,18,4]}});
+      map.addLayer({id:'misc-point',type:'circle',source:'tongji','source-layer':'misc-point',paint:{'circle-radius':2.5,'circle-color':'#90a4ae','circle-stroke-color':'#fff','circle-stroke-width':0.5}});
+      map.addLayer({id:'landuse',type:'fill',source:'tongji','source-layer':'landuse',paint:{'fill-color':'#c8e6c9','fill-opacity':0.35}});
+      map.addLayer({id:'water',type:'fill',source:'tongji','source-layer':'water',paint:{'fill-color':'#90caf9','fill-opacity':0.5}});
+      map.addLayer({id:'water-line',type:'line',source:'tongji','source-layer':'waterway',paint:{'line-color':'#90caf9','line-width':['interpolate',['linear'],['zoom'],14,0.8,18,3]}});
+      map.addLayer({id:'rd-m',type:'line',source:'tongji','source-layer':'roads',filter:['in',['get','highway'],['literal',['primary','secondary','tertiary','motorway','trunk']]],paint:{'line-color':'#ffb74d','line-width':['interpolate',['linear'],['zoom'],14,2,18,6]}});
+      map.addLayer({id:'rd-n',type:'line',source:'tongji','source-layer':'roads',filter:['in',['get','highway'],['literal',['residential','unclassified','service','footway','path','pedestrian','steps','cycleway','living_street']]],paint:{'line-color':'#cfd8dc','line-width':['interpolate',['linear'],['zoom'],14,0.8,18,3]}});
+      map.addLayer({id:'bld',type:'fill-extrusion',source:'tongji','source-layer':'buildings',paint:{'fill-extrusion-color':['match',['get','building'],'university','#90caf9','dormitory','#ef9a9a','apartments','#ef9a9a','library','#ffe082','school','#a5d6a7','hospital','#ef9a9a','retail','#ce93d8','office','#b0bec5','#e0e0e0'],'fill-extrusion-height':['*',['case',['has','building:levels'],['to-number',['get','building:levels']],2],3.5],'fill-extrusion-opacity':0.8}});
+      map.addLayer({id:'poi',type:'circle',source:'tongji','source-layer':'pois',paint:{'circle-radius':4,'circle-color':'#e53935','circle-stroke-color':'#fff','circle-stroke-width':1.5}});
+
+      // 描红边
+      var hl = {'line-color':'#ff1744','line-width':3,'line-opacity':1};
+      map.addLayer({id:'hl-b',type:'line',source:'tongji','source-layer':'buildings',filter:['==',['get','id'],''],paint:hl});
+      map.addLayer({id:'hl-r',type:'line',source:'tongji','source-layer':'roads',filter:['==',['get','id'],''],paint:{'line-color':'#ff1744','line-width':5}});
+      map.addLayer({id:'hl-l',type:'line',source:'tongji','source-layer':'landuse',filter:['==',['get','id'],''],paint:hl});
+      map.addLayer({id:'hl-w',type:'line',source:'tongji','source-layer':'water',filter:['==',['get','id'],''],paint:hl});
+      map.addLayer({id:'hl-wl',type:'line',source:'tongji','source-layer':'waterway',filter:['==',['get','id'],''],paint:{'line-color':'#ff1744','line-width':5}});
+      map.addLayer({id:'hl-misc',type:'line',source:'tongji','source-layer':'misc',filter:['==',['get','id'],''],paint:hl});
+      map.addLayer({id:'hl-misc-l',type:'line',source:'tongji','source-layer':'misc-line',filter:['==',['get','id'],''],paint:{'line-color':'#ff1744','line-width':5}});
+      map.addLayer({id:'hl-misc-p',type:'circle',source:'tongji','source-layer':'misc-point',filter:['==',['get','id'],''],paint:{'circle-radius':6,'circle-color':'#ff1744','circle-stroke-color':'#fff','circle-stroke-width':2}});
+      map.addLayer({id:'hl-p',type:'circle',source:'tongji','source-layer':'pois',filter:['==',['get','id'],''],paint:{'circle-radius':8,'circle-color':'#ff1744','circle-stroke-color':'#fff','circle-stroke-width':3}});
+
+      // 点击 - 全局 handler，按渲染顺序取最顶部 feature
+      var cl = ['poi','bld','rd-m','rd-n','water-line','water','landuse','misc-line','misc','misc-point'];
+      cl.forEach(function(l){
+        map.on('mouseenter',l,function(){map.getCanvas().style.cursor='pointer'});
+        map.on('mouseleave',l,function(){map.getCanvas().style.cursor=''});
+      });
+      map.on('click',function(e){
+        var features = map.queryRenderedFeatures(e.point,{layers:cl});
+        // DEBUG: 查看点击位置下所有 feature
+        console.log('=== click debug ===');
+        console.log('point:', e.point);
+        console.log('features count:', features.length);
+        features.forEach(function(f, i){
+          console.log('  ['+i+'] layer:', f.layer && f.layer.id, 'source:', f.sourceLayer, 'id:', f.properties && f.properties.id, 'geom:', f.geometry && f.geometry.type);
+        });
+        // END DEBUG
+        if(!features.length){ clear(); return; }
+        var top = features[0];
+        click({features: features}, top.layer.id);
+      });
+
+    });
+  }
+
+  function l2s(l){return{bld:'buildings','rd-m':'roads','rd-n':'roads',poi:'pois',landuse:'landuse',water:'water','water-line':'waterway',misc:'misc','misc-line':'misc-line','misc-point':'misc-point'}[l]||l}
+
+  function click(e, lid){
+    if(!e.features||!e.features.length)return;
+    var f = e.features[0];
+    curLayer = l2s(lid);
+    curFeatId = f.properties ? (f.properties.id || f.properties.osm_id) : null;
+    curGeom = f.geometry;
+    curTags = {};
+    var r = f.properties||{};
+    Object.keys(r).forEach(function(k){if(k!=='id')curTags[k]=r[k]});
+
+    // 同步到 DOM，防止变量被 clear() 清掉
+    var w = document.getElementById('tags-wrap');
+    w.dataset.layer = curLayer;
+    w.dataset.featId = curFeatId;
+    w.dataset.geom = JSON.stringify(curGeom);
+
+    // 描红
+    ['hl-b','hl-r','hl-l','hl-w','hl-wl','hl-misc','hl-misc-l','hl-misc-p','hl-p'].forEach(function(l){map.setFilter(l,['==',['get','id'],''])});
+    var hm={buildings:'hl-b',roads:'hl-r',landuse:'hl-l',water:'hl-w',waterway:'hl-wl',pois:'hl-p',misc:'hl-misc','misc-line':'hl-misc-l','misc-point':'hl-misc-p'};
+    var hl = hm[curLayer];
+    if(hl) map.setFilter(hl,['==',['get','id'],curFeatId]);
+
+    render();
+  }
+
+  function clear(){
+    curFeatId=null;curLayer='';curTags={};curGeom=null;
+    ['hl-b','hl-r','hl-l','hl-w','hl-wl','hl-misc','hl-misc-l','hl-misc-p','hl-p'].forEach(function(l){map.setFilter(l,['==',['get','id'],''])});
+    document.getElementById('no-sel').style.display='flex';
+    document.getElementById('tags-wrap').style.display='none';
+  }
+
+  function render(){
+    document.getElementById('no-sel').style.display='none';
+    document.getElementById('tags-wrap').style.display='block';
+    document.getElementById('mlayer').textContent=curLayer;
+    document.getElementById('mid').textContent='id:'+curFeatId;
+    document.getElementById('mgeom').textContent=(curGeom&&curGeom.type)||'';
+
+    var list=document.getElementById('tag-list');
+    list.innerHTML='';
+    var keys=Object.keys(curTags).sort();
+    if(!keys.length){list.innerHTML='<div style="color:#bbb;font-size:12px;padding:12px 0">此要素无 tags</div>';return;}
+
+    keys.forEach(function(k){
+      var ro=RO.hasOwnProperty(k);
+      var row=document.createElement('div');
+      row.className='tag-row'+(ro?' readonly':'');
+      row.innerHTML='<input class="k" value="'+e(k)+'" '+(ro?'readonly':'')+'><input class="v" value="'+e(String(curTags[k]||''))+'" '+(ro?'readonly':'')+'>'+(ro?'':'<button class="del">删除</button>');
+      list.appendChild(row);
+      if(!ro) row.querySelector('.del').onclick=function(){delete curTags[k];render();};
+    });
+  }
+
+  function readUI(){
+    var t={},rows=document.querySelectorAll('#tag-list .tag-row');
+    rows.forEach(function(r){var i=r.querySelectorAll('input'),k=i[0].value.trim(),v=i[1].value.trim();if(k)t[k]=v;});
+    return t;
+  }
+
+  function add(){
+    var k=document.getElementById('nk').value.trim(),v=document.getElementById('nv').value.trim();
+    if(!k)return T('key 不能为空');
+    curTags[k]=v;
+    document.getElementById('nk').value='';document.getElementById('nv').value='';
+    render();
+  }
+
+  function submit(){
+    // 优先从内存读，被清了就从 DOM dataset 恢复
+    var w = document.getElementById('tags-wrap');
+    if(!curFeatId && w.dataset.featId) {
+      curFeatId = w.dataset.featId;
+      curLayer = w.dataset.layer;
+      curGeom = JSON.parse(w.dataset.geom);
+    }
+    curTags = readUI();
+
+    var oid = curLayer+'/'+curFeatId;
+    var feat = {type:'Feature',id:oid,properties:JSON.parse(JSON.stringify(curTags)),geometry:curGeom};
+    feat.properties._layer = curLayer;
+    feat.properties._osm_id = curFeatId;
+
+    var btn=document.querySelector('.btn-submit');
+    btn.disabled=true; btn.textContent='提交中...';
+
+    fetch('/api/submit',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({features:[feat],user:'editor'})
+    }).then(function(r){return r.json()}).then(function(d){
+      if(d.ok)T('已提交: '+(curTags.name||curTags['name:zh']||oid)+' → 待审核');
+      else T('失败: '+(d.error||''));
+    }).catch(function(e){T('网络错误: '+e.message)}).finally(function(){btn.disabled=false;btn.textContent='提交推送'});
+  }
+
+  function e(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  function T(m){var el=document.getElementById('toast');el.textContent=m;el.className='show';setTimeout(function(){el.className=''},2000)}
+
+  return{init:init,add:add,submit:submit};
+})();
+window.addEventListener('DOMContentLoaded',E.init);
+</script>
+</body>
+</html>
