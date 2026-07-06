@@ -33,6 +33,11 @@ export default {
       return handleReview(path, request, env);
     }
 
+    // ── Admin 鉴权 ──
+    if (path.startsWith('/admin')) {
+      return checkAdmin(request, env);
+    }
+
     // ── 静态资源 ──
     return env.ASSETS.fetch(request);
   }
@@ -177,6 +182,65 @@ async function updateSubmissionIndex(env, id, sub) {
   };
   await env.TILES.put('submissions/index.json', JSON.stringify(index));
 }
+
+// ── Admin 鉴权 ──
+async function checkAdmin(request, env) {
+  const ADMIN_TOKEN = env.ADMIN_TOKEN || 'tongji-admin-2024';  // 默认值仅本地使用，生产请设 secret
+
+  const cookie = request.headers.get('Cookie') || '';
+  const cookieToken = cookie.match(/admin_token=([^;]+)/)?.[1];
+
+  const url = new URL(request.url);
+  const queryToken = url.searchParams.get('token');
+
+  // 已登录（cookie 有效 或 query param 正确）
+  if (cookieToken === ADMIN_TOKEN || queryToken === ADMIN_TOKEN) {
+    const resp = await env.ASSETS.fetch(request);
+    // 如果是 query param 登录，种 cookie（7 天有效）
+    if (queryToken === ADMIN_TOKEN) {
+      const headers = new Headers(resp.headers);
+      headers.set('Set-Cookie', `admin_token=${ADMIN_TOKEN}; Path=/admin; Max-Age=604800; HttpOnly; SameSite=Strict`);
+      return new Response(resp.body, { status: resp.status, headers });
+    }
+    return resp;
+  }
+
+  // 未登录 → 显示密码输入页面
+  return new Response(LOGIN_HTML, {
+    status: 401,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
+}
+
+const LOGIN_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理员登录</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{display:flex;align-items:center;justify-content:center;height:100vh;background:#263238;font-family:system-ui,sans-serif}
+form{background:#fff;padding:32px;border-radius:8px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.3)}
+h1{font-size:18px;color:#333;margin-bottom:20px}
+input{padding:10px 14px;border:1px solid #ddd;border-radius:4px;font-size:14px;width:240px}
+button{margin-top:12px;padding:10px 32px;background:#1565c0;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px}
+button:hover{background:#0d47a1}
+.error{color:#c62828;font-size:12px;margin-top:8px;display:none}
+</style>
+</head>
+<body>
+<form method="get" action="">
+  <h1>🔒 管理员登录</h1>
+  <input type="password" name="token" placeholder="输入访问密钥" autofocus>
+  <button type="submit">进入</button>
+  <div class="error" id="err">密钥错误</div>
+</form>
+<script>
+if(location.search.includes('token='))document.getElementById('err').style.display='block';
+</script>
+</body>
+</html>`;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
